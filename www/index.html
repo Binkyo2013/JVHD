@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="vi-VN">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Language" content="vi-VN">
+    <meta name="language" content="Vietnamese">
+    <meta name="viewport" content="width=1920,height=1080">
+    <title>JVHD</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* [BinTV JVHD-STANDALONE 2026-08] Bản JVHD độc lập: không còn header
+           BinTV, hình nền xoay, đồng hồ/thời tiết hay lưới app của launcher.
+           Trang chỉ chứa JVHD (cổng PIN -> màn hình nguồn -> trình phát) trên
+           nền tối đúng tông JVHD (#07070a). Mọi phong cách khác giữ nguyên
+           style.css gốc. */
+        html, body { margin: 0; padding: 0; background: #07070a !important; overflow: hidden; }
+        #bg, header, main, #apps { display: none !important; }
+        /* [Windows FONT-VI 2026-09] Chữ Việt có dấu (ă â ê ô ơ ư, đ, à ạ ả ã)
+           phải render ĐÚNG và ĐỒNG BỘ cỡ với chữ không dấu. Nguyên nhân lỗi
+           "chữ có dấu nhỏ hơn" là do ký tự tiếng Việt bị rơi ra FONT DỰ PHÒNG
+           khác (font đang dùng thiếu glyph). Không được ép CỨNG một font duy
+           nhất thiếu tiếng Việt; thay vào đó dùng chuỗi font an toàn có đủ
+           glyph tiếng Việt, và cho phép hệ điều hành chọn font phù hợp. */
+        html, body, body *, input, button, select, textarea {
+            font-family: "Arial", "Segoe UI", "Tahoma", "Arial Unicode MS", "Noto Sans", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+    </style>
+    <script>
+        /* [BinTV JVHD-STANDALONE 2026-08] Đánh dấu chế độ JVHD độc lập cho app.js:
+           khởi động thẳng JVHD, bỏ qua toàn bộ khởi tạo của BinTV. */
+        window.__BINTV_JVHD_STANDALONE__ = true;
+    </script>
+</head>
+
+<body lang="vi-VN">
+
+    <!-- JAVASCRIPT -->
+    <!-- BinTV Android: Tizen-compatible shim injected before app.js (replaces $WEB_APIS/webapis/webapis.js) -->
+    <script src="hls.min.js"></script>
+    <script src="tizen_shim.js"></script>
+    <script src="app.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "jvhd-desktop",
+  "version": "1.0.0",
+  "description": "JVHD Desktop - chay tren Windows khong can emulator Android (thay MuMuPlayer)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "you",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^31.3.0"
+  }
+}

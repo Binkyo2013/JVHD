@@ -1,0 +1,22 @@
+
+[JVHD] [env] outbound-engine= chromium-net.fetch +browser-fetch-live
+[JVHD] Server cục bộ sẵn sàng tại http://127.0.0.1:55968/
+[JVHD] [live-browser] FAST_NET len= 470393 RAW[state=2,user=4,play=0,stream=0]
+[JVHD] [live-warm] ok https://vi.stripchat.com/girls
+[JVHD] [proxy-live] browser-fetch -> https://vi.stripchat.com/girls/vietnamese
+[JVHD] [live-browser] FAST_NET len= 651338 RAW[state=2,user=78,play=74,stream=74]
+[JVHD] [proxy-live] browser-fetch -> https://vi.stripchat.com/api/front/v2/models?primaryTag=girls&requestPath=%2Fgirls%2Fvietnamese&limit=60&offset=0
+[JVHD] [proxy-live] browser-fetch -> https://vi.stripchat.com/Tran_ny
+[JVHD] [live-browser] url= https://vi.stripchat.com/api/front/v2/models?primaryTag=girls&requestP RAW[state=0,user=372,play=0,stream=372,len=417129] DOM[state=0,user=372,play=0,stream=372,len=417137] gate-clicked= false chose= DOM
+[JVHD] [live-browser] FAST_INPAGE len= 424176 RAW[state=2,user=8,play=0,stream=2]
+[JVHD] [proxy-live] browser-fetch -> https://vi.stripchat.com/69daxiu01
+[JVHD] [live-browser] FAST_INPAGE len= 432291 RAW[state=2,user=8,play=0,stream=2]
+[JVHD] [proxy-live] browser-fetch -> https://vi.stripchat.com/girls/vietnamese
+[JVHD] [live-browser] CACHE_HIT len= 651338
+[JVHD] [proxy-live] browser-fetch -> https://vi.stripchat.com/api/front/v2/models?primaryTag=girls&requestPath=%2Fgirls%2Fvietnamese&limit=60&offset=0
+[JVHD] [live-browser] CACHE_HIT len= 417137
+[JVHD] [proxy-live] browser-fetch -> https://vi.stripchat.com/Embes-Damdang
+[JVHD] [live-browser] FAST_INPAGE len= 430152 RAW[state=2,user=6,play=0,stream=2]
+[JVHD] [proxy-live] browser-fetch -> https://vi.stripchat.com/Cherry868
+[JVHD] [live-browser] FAST_INPAGE len= 417037 RAW[state=2,user=6,play=0,stream=2]
+^C

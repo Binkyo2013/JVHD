@@ -1,0 +1,1335 @@
+/* =====================================================
+   BINTV - STYLE
+   Samsung TV / Tizen Web App
+   ===================================================== */
+
+* { box-sizing: border-box; }
+
+html, body {
+    width: 100%; height: 100%; margin: 0; padding: 0;
+    overflow: hidden; font-family: Arial, sans-serif; color: #fff;
+}
+
+body {
+    position: relative; width: 100%; height: 100%;
+    background-color: #000;
+}
+
+#bg {
+    position: fixed; left: 0; top: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none; overflow: hidden;
+}
+
+/* Lớp hình nền phụ trợ cho hiệu ứng chuyển cảnh mờ dần (Cross-fade) */
+.bg-layer {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    background-repeat: no-repeat; background-position: center center;
+    background-size: cover; opacity: 0;
+    transition: opacity 1.5s ease-in-out;
+}
+
+.bg-layer.active {
+    opacity: 1;
+}
+
+header {
+    position: relative; z-index: 10; width: 100%; height: 180px;
+    padding: 45px 70px 0;
+    display: flex; align-items: flex-start; justify-content: space-between;
+}
+
+.title {
+    font-size: 100px !important; font-weight: 700; letter-spacing: 2px; line-height: 1.1;
+    color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.65);
+}
+
+.datetime {
+    display: flex; flex-direction: column; align-items: flex-end;
+    justify-content: flex-start; text-align: right; color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,.65);
+}
+
+#date { font-size: 30px; font-weight: 600; line-height: 1.2; margin-bottom: 5px; }
+#clock { font-size: 52px; font-weight: 700; line-height: 1; }
+/* =====================================================
+   WEATHER
+   ===================================================== */
+.weather {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 0;
+    min-height: 170px;
+    margin-top: 10px;
+    color: #fff;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    text-shadow: 0 2px 8px rgba(0,0,0,.75);
+}
+
+/*
+   Hàng trên:
+          ☁️   29°C
+
+   Hàng dưới:
+            Nhiều mây
+*/
+.weather-icon-block {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-height: 150px;
+}
+
+/* Khối icon */
+.weather-icon {
+    width: 200px;
+    height: 200px;
+    flex: 0 0 200px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Nhiệt độ nằm ngang với icon */
+.weather-temp {
+    display: inline-block;
+    font-size: 100px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/*
+   Mô tả thời tiết nằm bên dưới icon.
+   Độ rộng bằng icon để chữ nằm cân giữa icon.
+*/
+.weather-description {
+    display: block;
+    width: 600px;
+    margin-top: -20px !important;
+    font-size: 80px;
+    font-weight: 600;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* SVG */
+.weather-svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.weather-svg line,
+.weather-svg circle,
+.weather-svg path {
+    vector-effect: non-scaling-stroke;
+}
+
+.weather-sun circle,
+.weather-sun .sun-rays line {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+
+.weather-sun circle {
+    fill: rgba(255,255,255,.12);
+    animation: weather-pulse 2.4s ease-in-out infinite;
+}
+
+.sun-rays line {
+    animation: weather-rays 3s linear infinite;
+    transform-origin: 32px 32px;
+}
+
+.weather-moon path {
+    fill: #fff;
+    animation: weather-float 2.8s ease-in-out infinite;
+}
+
+.weather-sun-small {
+    fill: rgba(255,255,255,.10);
+    stroke: #fff;
+    stroke-width: 3;
+}
+
+.sun-rays-small line {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+}
+
+.cloud-shape {
+    fill: rgba(255,255,255,.16);
+    stroke: #fff;
+    stroke-width: 2.5;
+}
+
+.cloud-back {
+    opacity: .55;
+}
+
+.weather-cloud-moving .cloud-shape,
+.weather-partly .cloud-shape,
+.weather-rain .cloud-shape,
+.weather-storm .cloud-shape,
+.weather-snow .cloud-shape {
+    animation: weather-float 2.4s ease-in-out infinite;
+}
+
+.rain-drops line {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 8 5;
+    animation: weather-rain 1s linear infinite;
+}
+
+.rain-drops line:nth-child(2) {
+    animation-delay: -.25s;
+}
+
+.rain-drops line:nth-child(3) {
+    animation-delay: -.5s;
+}
+
+.lightning {
+    fill: #fff;
+    stroke: #fff;
+    stroke-width: 1;
+    animation: weather-flash 1.7s steps(2, end) infinite;
+}
+
+.fog-lines line {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 22 8;
+    animation: weather-fog 3s linear infinite;
+}
+
+.fog-lines line:nth-child(2) {
+    animation-delay: -.8s;
+}
+
+.fog-lines line:nth-child(3) {
+    animation-delay: -1.6s;
+}
+
+.snow-flakes circle {
+    fill: #fff;
+    animation: weather-snow 1.8s ease-in-out infinite;
+}
+
+.snow-flakes circle:nth-child(2) {
+    animation-delay: -.6s;
+}
+
+.snow-flakes circle:nth-child(3) {
+    animation-delay: -1.2s;
+}
+
+.weather-loader circle {
+    stroke: #fff;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 65 45;
+    fill: none;
+    animation: weather-spin 1s linear infinite;
+}
+
+.weather-loading .weather-description,
+.weather-error .weather-description {
+    opacity: .82;
+}
+
+@keyframes weather-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: .86;
+    }
+}
+
+@keyframes weather-rays {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes weather-float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-2px);
+    }
+}
+
+@keyframes weather-rain {
+    from {
+        stroke-dashoffset: 0;
+        opacity: .35;
+    }
+
+    to {
+        stroke-dashoffset: -13;
+        opacity: 1;
+    }
+}
+
+@keyframes weather-flash {
+    0%, 68%, 100% {
+        opacity: 1;
+    }
+
+    70%, 76% {
+        opacity: .25;
+    }
+
+    78% {
+        opacity: 1;
+    }
+}
+
+@keyframes weather-fog {
+    from {
+        stroke-dashoffset: 0;
+        opacity: .55;
+    }
+
+    to {
+        stroke-dashoffset: -30;
+        opacity: 1;
+    }
+}
+
+@keyframes weather-snow {
+    0%, 100% {
+        transform: translateY(0);
+        opacity: .7;
+    }
+
+    50% {
+        transform: translateY(3px);
+        opacity: 1;
+    }
+}
+
+@keyframes weather-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .weather-svg * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+@keyframes weather-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: .86; }
+}
+@keyframes weather-rays {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+@keyframes weather-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+}
+@keyframes weather-rain {
+    from { stroke-dashoffset: 0; opacity: .35; }
+    to { stroke-dashoffset: -13; opacity: 1; }
+}
+@keyframes weather-flash {
+    0%, 68%, 100% { opacity: 1; }
+    70%, 76% { opacity: .25; }
+    78% { opacity: 1; }
+}
+@keyframes weather-fog {
+    from { stroke-dashoffset: 0; opacity: .55; }
+    to { stroke-dashoffset: -30; opacity: 1; }
+}
+@keyframes weather-snow {
+    0%, 100% { transform: translateY(0); opacity: .7; }
+    50% { transform: translateY(3px); opacity: 1; }
+}
+@keyframes weather-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .weather-svg * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+main {
+    position: absolute; z-index: 10; left: 0; bottom: 0; width: 100%;
+    height: 270px; padding: 0 50px 20px;
+}
+
+.apps {
+    width: 100%; height: 180px;
+    display: flex; flex-direction: row; flex-wrap: nowrap;
+    align-items: center; justify-content: flex-start;
+    gap: 22px; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; scroll-behavior: smooth;
+    overscroll-behavior-x: contain; padding: 12px 0;
+}
+
+.apps::-webkit-scrollbar { display: none; }
+
+.apps.move-mode {
+    scroll-behavior: auto !important;
+}
+
+.app {
+    position: relative; flex: 0 0 190px; width: 190px; height: 145px;
+    background: rgba(0,0,0,.48); border: 2px solid rgba(255,255,255,.10);
+    border-radius: 18px; color: rgba(255,255,255,.82); outline: none;
+    transition: transform .18s ease, background .18s ease,
+                border-color .18s ease, box-shadow .18s ease, opacity .18s ease;
+    font-family: Arial, sans-serif; cursor: pointer; padding: 14px;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; z-index: 1;
+}
+
+.app .app-icon, .app img, .app span img {
+    width: 64px !important; height: 64px !important;
+    object-fit: contain !important; object-position: center !important;
+    display: block; margin: 0 auto;
+}
+
+.app b {
+    display: block; font-size: 22px; font-weight: 600; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%; color: rgba(255,255,255,.78);
+    text-shadow: 0 2px 6px rgba(0,0,0,.70);
+}
+
+.app.focus {
+    background: rgba(255,255,255,.30); border-color: rgba(255,255,255,.95);
+    color: #fff; transform: scale(1.08);
+    box-shadow: 0 0 0 2px rgba(255,255,255,.20), 0 8px 30px rgba(0,0,0,.45);
+    z-index: 5;
+}
+
+.app.focus b { color: #fff; font-size: 23px; text-shadow: 0 2px 8px rgba(0,0,0,.80); }
+
+.app.moving, .app.focus.moving {
+    transform: scale(1.22); background: rgba(255,255,255,.45);
+    border-color: #fff; color: #fff;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.40),
+                0 0 40px rgba(255,255,255,.50),
+                0 16px 45px rgba(0,0,0,.65);
+    z-index: 100;
+    transition: none !important; 
+}
+
+/* Multi-select check badge */
+.multi-check {
+    display: none; 
+    position: absolute; right: 10px; top: 8px;
+    width: 30px; height: 30px; border-radius: 50%;
+    align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700; line-height: 1;
+    color: #fff; background: rgba(0,0,0,.45);
+    border: 2px solid rgba(255,255,255,.45);
+    z-index: 4;
+}
+
+.multi-select-mode .multi-check {
+    display: flex;
+}
+
+/* Favorite badge (❤️) */
+.favorite-badge {
+    position: absolute; right: 10px; top: 8px;
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; line-height: 1;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.3);
+    z-index: 3;
+}
+
+.multi-select-mode .app.selected .favorite-badge {
+    right: 44px;
+}
+
+.app.selected {
+    border-color: rgba(255,255,255,1);
+    background: rgba(255,255,255,.22);
+    box-shadow: 0 0 0 3px rgba(255,255,255,.22), 0 8px 25px rgba(0,0,0,.45);
+}
+
+.app.selected.focus {
+    background: rgba(255,255,255,.38);
+    box-shadow: 0 0 0 4px rgba(255,255,255,.40), 0 10px 32px rgba(0,0,0,.55);
+}
+
+.app.selected .multi-check {
+    background: rgba(255,255,255,.90); color: #111;
+    border-color: #fff;
+}
+
+.app:not(.focus):not(.moving) { opacity: .92; }
+.app:focus, button.app:focus { outline: none; -webkit-focus-ring-color: transparent; }
+button { -webkit-tap-highlight-color: transparent; }
+
+/* Long-press action menu */
+#bintv-app-menu {
+    position: fixed; z-index: 99999; min-width: 250px; padding: 10px;
+    border-radius: 14px; background: rgba(18,18,18,.97);
+    border: 1px solid rgba(255,255,255,.24);
+    box-shadow: 0 12px 45px rgba(0,0,0,.68); color: #fff;
+}
+
+#bintv-app-menu .bintv-menu-item {
+    min-height: 48px; padding: 13px 22px; margin: 3px 0;
+    border-radius: 9px; font-size: 21px; line-height: 1.15;
+    color: #fff; background: transparent; white-space: nowrap;
+}
+
+#bintv-app-menu .bintv-menu-item.focus {
+    background: rgba(255,255,255,.24); border: 1px solid rgba(255,255,255,.60);
+    color: #fff;
+}
+
+/* Multi-select information bar */
+#bintv-multi-bar {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    z-index: 99990; display: flex; align-items: center; gap: 12px;
+    padding: 12px 18px; border-radius: 14px;
+    background: rgba(18,18,18,.95); border: 1px solid rgba(255,255,255,.22);
+    box-shadow: 0 10px 35px rgba(0,0,0,.55); color: #fff;
+    font-size: 19px;
+}
+
+#bintv-multi-bar .multi-help { opacity: .72; }
+#bintv-multi-bar .multi-action {
+    min-width: 130px; padding: 9px 15px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.30); background: rgba(255,255,255,.12);
+    color: #fff; font-size: 17px; outline: none;
+}
+
+/* Toast/status */
+#bintv-toast {
+    position: fixed; left: 50%; bottom: 120px; transform: translate(-50%, 20px);
+    z-index: 100000; max-width: 900px; padding: 13px 22px;
+    border-radius: 10px; background: rgba(15,15,15,.94);
+    border: 1px solid rgba(255,255,255,.22); color: #fff;
+    font-size: 19px; text-align: center; opacity: 0;
+    pointer-events: none; transition: opacity .18s ease, transform .18s ease;
+}
+
+#bintv-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media screen and (min-width: 1800px) {
+    .title { font-size: 50px; }
+    #date { font-size: 32px; }
+    #clock { font-size: 56px; }
+    .app { flex-basis: 200px; width: 200px; height: 150px; }
+    .app .app-icon, .app img, .app span img { width: 70px !important; height: 70px !important; }
+    .app b { font-size: 23px; }
+    .app.focus { transform: scale(1.08); }
+    .app.moving, .app.focus.moving { transform: scale(1.22); }
+}
+@media screen and (max-width: 700px) {
+    header { height: 145px; padding: 22px 24px 0; }
+    .title { font-size: 34px; }
+    .datetime { max-width: 72%; }
+    #date { font-size: 18px; }
+    #clock { font-size: 32px; }
+    .weather { align-items: flex-end; margin-top: 7px; min-height: 72px; }
+    .weather-top { gap: 7px; min-height: 58px; }
+    .weather-icon { width: 54px; height: 54px; flex-basis: 54px; }
+    .weather-temp { font-size: 32px; }
+    .weather-description { margin-top: 2px; font-size: 18px; text-align: center; }
+    main { height: 235px; padding: 0 18px 14px; }
+    .apps { height: 160px; gap: 12px; }
+    .app { flex-basis: 145px; width: 145px; height: 125px; padding: 10px; }
+    .app .app-icon, .app img, .app span img { width: 54px !important; height: 54px !important; }
+    .app b { font-size: 17px; }
+    .app.focus b { font-size: 18px; }
+}
+
+/* =====================================================
+   EXIT MODAL - QUÉT | THOÁT | HỦY
+   ===================================================== */
+#bintv-exit-modal {
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 300000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: Arial, sans-serif;
+    color: #fff;
+}
+
+#bintv-exit-modal.show {
+    display: flex;
+}
+
+#bintv-exit-modal .bintv-exit-backdrop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,.68);
+}
+
+#bintv-exit-modal .bintv-exit-dialog {
+    position: relative;
+    z-index: 1;
+    width: 820px;
+    max-width: 88%;
+    padding: 42px 46px 38px;
+    border-radius: 24px;
+    background: rgba(20,20,20,.98);
+    border: 2px solid rgba(255,255,255,.28);
+    box-shadow: 0 24px 80px rgba(0,0,0,.75);
+    text-align: center;
+}
+
+#bintv-exit-modal .bintv-exit-title {
+    margin: 0 0 16px;
+    color: #fff;
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+#bintv-exit-modal .bintv-exit-message {
+    margin: 0 auto 34px;
+    max-width: 700px;
+    color: rgba(255,255,255,.84);
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+#bintv-exit-modal .bintv-exit-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+
+#bintv-exit-modal .bintv-exit-button {
+    flex: 0 0 205px;
+    width: 205px;
+    height: 72px;
+    padding: 0 18px;
+    border: 2px solid rgba(255,255,255,.28);
+    border-radius: 14px;
+    outline: none;
+    background: rgba(255,255,255,.10);
+    color: #fff;
+    font-family: Arial, sans-serif;
+    font-size: 27px;
+    font-weight: 700;
+    text-align: center;
+    transition: transform .15s ease, background .15s ease,
+                border-color .15s ease, box-shadow .15s ease;
+}
+
+#bintv-exit-modal .bintv-exit-button.focus,
+#bintv-exit-modal .bintv-exit-button:focus {
+    transform: scale(1.08);
+    background: #fff;
+    border-color: #fff;
+    color: #111;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.22),
+                0 12px 32px rgba(0,0,0,.55);
+}
+
+@media screen and (max-width: 900px) {
+    #bintv-exit-modal .bintv-exit-dialog {
+        width: 92%;
+        padding: 30px 22px 28px;
+    }
+
+    #bintv-exit-modal .bintv-exit-title {
+        font-size: 32px;
+    }
+
+    #bintv-exit-modal .bintv-exit-message {
+        margin-bottom: 24px;
+        font-size: 19px;
+    }
+
+    #bintv-exit-modal .bintv-exit-actions {
+        gap: 10px;
+    }
+
+    #bintv-exit-modal .bintv-exit-button {
+        flex-basis: 29%;
+        width: 29%;
+        min-width: 0;
+        height: 60px;
+        font-size: 21px;
+    }
+}
+
+/* =====================================================
+   BUILTIN MOVIE BROWSER / PLAYER
+   ===================================================== */
+body.bintv-movie-mode > #bg,
+body.bintv-movie-mode > header,
+body.bintv-movie-mode > main {
+    visibility: hidden;
+}
+#bintv-movie-browser {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+    z-index: 350000; display: none; color: #fff;
+    background: #101014; font-family: Arial, sans-serif;
+}
+#bintv-movie-browser.show { display: block; }
+#bintv-movie-browser.player-active { visibility: hidden; }
+.movie-browser-header {
+    height: 118px; padding: 24px 38px;
+    display: flex; align-items: center; gap: 28px;
+    background: #17171d; border-bottom: 1px solid rgba(255,255,255,.16);
+}
+.movie-browser-title { font-size: 48px; font-weight: 700; color: #ff19b9; }
+.movie-browser-catalog-title {
+    flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    font-size: 31px; font-weight: 700;
+}
+.movie-browser-body { height: calc(100% - 118px); display: flex; }
+.movie-catalogs {
+    flex: 0 0 300px; width: 300px; height: 100%; overflow-y: auto;
+    padding: 22px 14px; background: #15151a; border-right: 1px solid rgba(255,255,255,.14);
+}
+.movie-catalog-row {
+    min-height: 58px; margin: 5px 0; padding: 15px 18px;
+    border: 2px solid transparent; border-radius: 11px;
+    color: rgba(255,255,255,.78); font-size: 21px; line-height: 1.2;
+}
+.movie-catalog-row.selected { color: #fff; background: rgba(255,25,185,.13); }
+.movie-catalog-row.focus {
+    color: #111; background: #fff; border-color: #fff;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.18);
+}
+.movie-content { position: relative; flex: 1; height: 100%; overflow: hidden; padding: 54px 24px 24px; }
+.movie-status {
+    position: absolute; left: 28px; top: 14px; right: 28px;
+    min-height: 28px; color: rgba(255,255,255,.72); font-size: 19px;
+}
+.movie-status.error { color: #ff8b8b; }
+.movie-grid {
+    height: 100%; overflow-y: auto; padding: 8px 12px 40px;
+    display: flex; flex-direction: row; flex-wrap: wrap;
+    align-content: flex-start;
+}
+.movie-card {
+    flex: 0 0 calc(20% - 18px); min-width: 0; margin: 0 9px 24px;
+    padding: 8px; border: 3px solid transparent;
+    border-radius: 14px; background: rgba(255,255,255,.055);
+    transition: transform .08s ease-out, border-color .08s linear, background .08s linear;
+}
+.movie-card.focus {
+    z-index: 2; transform: scale(1.06); border-color: #fff;
+    background: rgba(255,255,255,.18); box-shadow: 0 12px 35px rgba(0,0,0,.6);
+}
+.movie-card-poster {
+    display: block; width: 100%; height: 300px; object-fit: cover;
+    border-radius: 9px; background: #292931;
+}
+/* Chỉ danh mục TRUYỀN HÌNH dùng poster/card nằm ngang để không cắt tên trận đấu. */
+.movie-grid.movie-grid-tv .movie-card-poster {
+    height: 165px; aspect-ratio: 16 / 9; object-fit: contain;
+    background: #111118;
+}
+.movie-card-name {
+    height: 46px; margin-top: 9px; overflow: hidden;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    white-space: normal; line-height: 1.2;
+    color: #fff; font-size: 19px; font-weight: 700;
+}
+.movie-card-meta {
+    height: 22px; margin-top: 3px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    color: rgba(255,255,255,.60); font-size: 15px;
+}
+.movie-card-skeleton { pointer-events: none; }
+.movie-skeleton-block {
+    background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.14), rgba(255,255,255,.06));
+    background-size: 100% 100%; animation: none;
+}
+.movie-skeleton-name { width: 82%; height: 20px; margin-top: 12px; border-radius: 6px; }
+.movie-skeleton-meta { width: 55%; height: 15px; margin-top: 8px; border-radius: 5px; }
+@keyframes movie-skeleton-pulse {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+.movie-episodes {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+    z-index: 355000; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.76);
+}
+.movie-episodes.show { display: flex; }
+.movie-episodes-dialog {
+    width: 1120px; max-height: 820px; padding: 32px;
+    border: 2px solid rgba(255,255,255,.25); border-radius: 20px;
+    background: #191920; box-shadow: 0 25px 90px rgba(0,0,0,.8);
+}
+.movie-episodes-title { margin-bottom: 24px; font-size: 34px; font-weight: 700; }
+.movie-episodes-list {
+    max-height: 620px; overflow-y: auto;
+    display: flex; flex-direction: row; flex-wrap: wrap;
+}
+.movie-episode-button {
+    flex: 0 0 calc(20% - 14px); min-height: 64px; margin: 7px;
+    padding: 18px 12px; border: 2px solid rgba(255,255,255,.18);
+    border-radius: 10px; background: rgba(255,255,255,.08);
+    color: #fff; font-size: 20px; font-weight: 700; text-align: center;
+}
+.movie-episode-button.focus {
+    border-color: #fff; background: #fff; color: #111;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.18);
+}
+.movie-episodes-help { margin-top: 22px; color: rgba(255,255,255,.65); font-size: 18px; text-align: center; }
+#bintv-movie-player {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+    z-index: 360000; display: none; overflow: hidden; background: #000;
+}
+#bintv-movie-player.show { display: block; }
+#bintv-movie-avplayer,
+#bintv-movie-html5-player {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    background: #000; object-fit: contain;
+}
+.movie-player-overlay {
+    position: absolute; left: 0; top: 0; right: 0; z-index: 2;
+    padding: 28px 42px 60px;
+    background: linear-gradient(to bottom, rgba(0,0,0,.86), rgba(0,0,0,0));
+    pointer-events: none;
+}
+.movie-player-title { max-width: 1450px; font-size: 32px; font-weight: 700; }
+.movie-player-status { margin-top: 8px; color: rgba(255,255,255,.78); font-size: 20px; }
+.movie-seek-timeline {
+    position: absolute; left: 90px; right: 90px; bottom: 46px; z-index: 12;
+    padding: 18px 24px 20px; border-radius: 16px;
+    background: rgba(8,8,12,.86); box-shadow: 0 12px 38px rgba(0,0,0,.62);
+    opacity: 0; transform: translateY(22px); visibility: hidden;
+    transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
+    pointer-events: none;
+}
+.movie-seek-timeline.show {
+    opacity: 1; transform: translateY(0); visibility: visible;
+    transition-delay: 0s;
+}
+.movie-seek-timeline-times {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; color: #fff; font-size: 20px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+#bintv-movie-seek-target { color: #ff39c5; }
+.movie-seek-timeline-track {
+    position: relative; width: 100%; height: 12px; border-radius: 999px;
+    background: rgba(255,255,255,.24);
+}
+.movie-seek-timeline-progress {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    border-radius: 999px; background: linear-gradient(90deg, #ff19b9, #ff70d5);
+    transition: width .10s linear;
+}
+.movie-seek-timeline-thumb {
+    position: absolute; left: 0; top: 50%; width: 26px; height: 26px;
+    margin-left: -13px; margin-top: -13px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 0 5px rgba(255,25,185,.46), 0 4px 14px rgba(0,0,0,.55);
+    transition: left .10s linear;
+}
+
+/* Vietsub controls */
+.movie-subtitle-status {
+    min-height: 28px; margin: -10px 0 18px; color: rgba(255,255,255,.72);
+    font-size: 18px; text-align: center;
+}
+.movie-subtitle-text {
+    position: absolute; left: 8%; right: 8%; bottom: 92px; z-index: 5;
+    color: #fff; font-family: Arial, sans-serif; font-size: 38px;
+    font-weight: 700; line-height: 1.28; text-align: center;
+    white-space: pre-line; text-shadow: 0 2px 4px #000, 0 0 8px #000, 2px 2px 2px #000;
+    pointer-events: none;
+}
+.movie-subtitle-menu {
+    position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.68);
+}
+.movie-subtitle-menu.show { display: flex; }
+.movie-subtitle-dialog {
+    width: 680px; max-height: 760px; padding: 30px;
+    border: 2px solid rgba(255,255,255,.26); border-radius: 18px;
+    background: #191920; box-shadow: 0 24px 80px rgba(0,0,0,.8);
+}
+.movie-subtitle-title {
+    margin-bottom: 22px; color: #fff; font-size: 34px; font-weight: 700;
+    text-align: center;
+}
+.movie-subtitle-list { max-height: 620px; overflow-y: auto; }
+.movie-subtitle-option {
+    min-height: 58px; margin: 8px 0; padding: 16px 20px;
+    border: 2px solid rgba(255,255,255,.18); border-radius: 10px;
+    background: rgba(255,255,255,.07); color: #fff;
+    font-size: 21px; font-weight: 700; text-align: center;
+}
+.movie-subtitle-option.focus {
+    border-color: #fff; background: #fff; color: #111;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.18);
+}
+
+/* Movie source grouping and actual-data filters */
+.movie-filter-bar {
+    display: flex; flex-direction: row; align-items: center; gap: 10px;
+}
+.movie-filter-button {
+    min-width: 128px; height: 50px; padding: 0 16px;
+    border: 2px solid rgba(255,255,255,.22); border-radius: 10px;
+    outline: none; background: rgba(255,255,255,.07); color: rgba(255,255,255,.78);
+    font-family: Arial, sans-serif; font-size: 18px; font-weight: 700;
+}
+.movie-filter-button.active {
+    border-color: rgba(255,25,185,.9); background: rgba(255,25,185,.20); color: #fff;
+}
+.movie-filter-button.focus {
+    border-color: #fff; background: #fff; color: #111;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.18);
+}
+.movie-search-button {
+    flex: 0 0 auto; min-width: 158px; height: 50px; padding: 0 16px;
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    border: 2px solid rgba(255,255,255,.22); border-radius: 10px;
+    outline: none; background: rgba(255,25,185,.14); color: #fff;
+    font-family: Arial, sans-serif; font-size: 18px; font-weight: 700;
+}
+.movie-search-button-mic { font-size: 23px; line-height: 1; }
+.movie-search-button.focus {
+    border-color: #fff; background: #fff; color: #111;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.18);
+}
+.movie-filter-menu {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 356500;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.78);
+}
+.movie-filter-menu.show { display: flex; }
+.movie-filter-menu-dialog {
+    width: 680px; max-height: 880px; padding: 32px;
+    border: 2px solid rgba(255,255,255,.25); border-radius: 20px;
+    background: #191920; box-shadow: 0 24px 80px rgba(0,0,0,.8);
+}
+.movie-filter-menu-title { margin-bottom: 22px; font-size: 34px; font-weight: 700; text-align: center; }
+.movie-filter-menu-list { display: flex; flex-direction: column; gap: 10px; }
+.movie-filter-menu-option {
+    min-height: 62px; padding: 17px 22px;
+    border: 2px solid rgba(255,255,255,.18); border-radius: 11px;
+    background: rgba(255,255,255,.07); color: #fff;
+    font-size: 21px; font-weight: 700;
+}
+.movie-filter-menu-option.active {
+    border-color: #ff39c5; background: rgba(255,25,185,.20);
+}
+.movie-filter-menu-option.focus {
+    border-color: #fff; background: #fff; color: #111;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.18);
+}
+.movie-filter-menu-option.active.focus {
+    box-shadow: 0 0 0 4px rgba(255,25,185,.55);
+}
+.movie-filter-menu-help { margin-top: 20px; color: rgba(255,255,255,.65); font-size: 18px; text-align: center; }
+
+.movie-search-overlay {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 356000;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.78);
+}
+.movie-search-overlay.show { display: flex; }
+.movie-search-dialog {
+    width: 900px; padding: 38px 42px 32px;
+    border: 2px solid rgba(255,255,255,.28); border-radius: 22px;
+    background: #191920; box-shadow: 0 26px 95px rgba(0,0,0,.86);
+}
+.movie-search-title {
+    color: #fff; font-size: 38px; font-weight: 700; text-align: center;
+}
+.movie-search-status {
+    min-height: 29px; margin: 14px 0 24px;
+    color: rgba(255,255,255,.72); font-size: 19px; text-align: center;
+}
+.movie-search-status.error { color: #ff9999; }
+.movie-search-input {
+    display: block; box-sizing: border-box; width: 100%; height: 68px;
+    padding: 0 20px; border: 3px solid rgba(255,255,255,.25); border-radius: 12px;
+    outline: none; background: rgba(255,255,255,.09); color: #fff;
+    font-family: Arial, sans-serif; font-size: 25px; font-weight: 600;
+}
+.movie-search-input::placeholder { color: rgba(255,255,255,.45); }
+.movie-search-input.focus,
+.movie-search-input:focus {
+    border-color: #fff; background: rgba(255,255,255,.16);
+    box-shadow: 0 0 0 5px rgba(255,255,255,.16);
+}
+.movie-search-actions {
+    display: flex; flex-direction: row; justify-content: center; gap: 18px;
+    margin-top: 24px;
+}
+.movie-search-action {
+    min-width: 220px; height: 66px; padding: 0 18px;
+    border: 3px solid rgba(255,255,255,.22); border-radius: 12px;
+    outline: none; background: rgba(255,255,255,.08); color: #fff;
+    font-family: Arial, sans-serif; font-size: 22px; font-weight: 700;
+}
+.movie-search-action.focus {
+    border-color: #fff; background: #fff; color: #111;
+    box-shadow: 0 0 0 5px rgba(255,255,255,.16);
+}
+.movie-search-voice { background: rgba(255,25,185,.18); }
+.movie-search-keyboard { background: rgba(70,145,255,.16); }
+.movie-search-mic-icon,
+.movie-search-keyboard-icon { margin-right: 6px; font-size: 27px; vertical-align: -2px; }
+.movie-search-help {
+    margin-top: 25px; color: rgba(255,255,255,.57); font-size: 18px; text-align: center;
+}
+.movie-catalog-group-title {
+    margin: 18px 8px 8px; padding: 0 8px;
+    color: #ff72d6; font-size: 20px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+}
+.movie-catalog-group-title:first-child { margin-top: 2px; }
+
+/* Episode picker inside fullscreen player */
+.movie-player-episodes {
+    position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 22;
+    display: none; align-items: flex-end; justify-content: center;
+    padding: 0 4vw 7vh; background: rgba(0,0,0,.36);
+}
+.movie-player-episodes.show { display: flex; }
+.movie-player-episodes-dialog {
+    width: 92vw; max-height: 300px; padding: 24px 26px;
+    border: 2px solid rgba(255,255,255,.26); border-radius: 18px;
+    background: rgba(20,20,25,.97); box-shadow: 0 20px 70px rgba(0,0,0,.8);
+}
+.movie-player-episodes-title {
+    margin-bottom: 18px; color: #fff; font-size: 28px; font-weight: 700;
+}
+.movie-player-episodes-list {
+    display: flex; flex-direction: row; flex-wrap: nowrap; gap: 12px;
+    overflow-x: auto; overflow-y: hidden; padding: 7px 5px 12px;
+}
+.movie-player-episode-option {
+    flex: 0 0 150px; min-width: 150px; height: 64px; padding: 18px 12px;
+    border: 2px solid rgba(255,255,255,.20); border-radius: 10px;
+    background: rgba(255,255,255,.08); color: #fff;
+    font-size: 20px; font-weight: 700; text-align: center;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.movie-player-episode-option.current {
+    border-color: #ff39c5; background: rgba(255,25,185,.22);
+}
+.movie-player-episode-option.focus {
+    border-color: #fff; background: #fff; color: #111;
+    transform: scale(1.06); box-shadow: 0 0 0 4px rgba(255,255,255,.18);
+}
+.movie-player-episode-option.current.focus {
+    box-shadow: 0 0 0 4px rgba(255,25,185,.55);
+}
+
+/* ===================== JVHD internal screen ===================== */
+#bintv-jvhd-screen { display: none; }
+body.bintv-jvhd-mode > #bg,
+body.bintv-jvhd-mode > header,
+body.bintv-jvhd-mode > main {
+    visibility: hidden;
+}
+#bintv-jvhd-screen.show {
+    display: flex; flex-direction: column;
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%; min-width: 100%; min-height: 100%;
+    z-index: 70; background: #07070a; color: #fff;
+    font-family: Arial, sans-serif; overflow: hidden;
+}
+.jvhd-header {
+    flex: 0 0 auto; display: flex; align-items: center;
+    padding: 22px 38px; background: linear-gradient(to bottom, rgba(0,0,0,.55), rgba(0,0,0,0));
+}
+.jvhd-logo {
+    font-size: 46px; font-weight: 900; letter-spacing: 1px; color: #1ec986;
+    text-shadow: 0 3px 14px rgba(30,201,134,.42);
+}
+.jvhd-body { flex: 1 1 auto; display: flex; min-height: 0; }
+.jvhd-sidebar {
+    flex: 0 0 260px; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px;
+    background: rgba(255,255,255,.03); border-right: 1px solid rgba(255,255,255,.07); overflow-y: auto;
+}
+.jvhd-source {
+    padding: 18px 22px; font-size: 24px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+    color: #cfcfd6; background: rgba(255,255,255,.04); border: 2px solid rgba(255,255,255,.07);
+    border-radius: 14px; cursor: pointer; outline: none;
+    transition: background .15s ease, border-color .15s ease, transform .12s ease, box-shadow .15s ease;
+}
+.jvhd-source.active { color: #fff; background: rgba(30,201,134,.16); border-color: rgba(30,201,134,.55); }
+.jvhd-source.focus { color: #fff; background: rgba(30,201,134,.24); border-color: #1ec986; box-shadow: 0 0 0 3px rgba(30,201,134,.30); transform: translateX(4px); }
+.jvhd-content { flex: 1 1 auto; padding: 18px 30px 30px; min-width: 0; overflow-y: auto; }
+.jvhd-grid {
+    /* [BinTV UI-SCALE 2026-08] Thẻ phim to gap 2 lan (260->520px) de nhin ro tren
+       TV/may chieu; chu, le, vien phong to tuong ung de tong the hai hoa. */
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+    gap: 20px; align-content: start;
+}
+.jvhd-card {
+    min-width: 0; background: #141419; border: 3px solid rgba(255,255,255,.06); border-radius: 18px;
+    overflow: hidden; cursor: pointer; outline: none; display: flex; flex-direction: column;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+.jvhd-card-poster { width: 100%; aspect-ratio: 3/4; background: #0c0c10; overflow: hidden; }
+.jvhd-card-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jvhd-card-info { min-width: 0; padding: 26px 28px 30px; }
+.jvhd-card-name {
+    min-height: 144px; max-height: 144px; overflow: hidden;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+    font-size: 38px; font-weight: 700; color: #f1f1f5; line-height: 1.25;
+    white-space: normal; overflow-wrap: break-word; word-break: break-word;
+}
+.jvhd-card-meta {
+    min-height: 42px; max-height: 84px; margin-top: 14px; overflow: hidden;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    color: rgba(255,255,255,.62); font-size: 32px; line-height: 1.3;
+    white-space: normal; overflow-wrap: break-word;
+}
+.jvhd-card.focus { border-color: #1ec986; box-shadow: 0 0 0 4px rgba(30,201,134,.30), 0 14px 34px rgba(0,0,0,.5); transform: scale(1.03); }
+.jvhd-status { grid-column: 1 / -1; padding: 60px 24px; text-align: center; color: rgba(255,255,255,.6); font-size: 30px; }
+@media (max-width: 1280px) {
+    .jvhd-sidebar { flex: 0 0 210px; }
+    .jvhd-grid { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 18px; }
+    .jvhd-card-name { min-height: 134px; max-height: 134px; font-size: 36px; }
+}
+
+/* ===================== JVHD child lock ===================== */
+#bintv-jvhd-pin-gate {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+    z-index: 370000; display: none; align-items: center; justify-content: center;
+    color: #fff; font-family: Arial, sans-serif;
+}
+#bintv-jvhd-pin-gate.show { display: flex; }
+.jvhd-pin-backdrop {
+    position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.88);
+}
+.jvhd-pin-dialog {
+    /* [BinTV UI-SCALE v2 2026-08] Man khoa tre em phong to de nhin ro tren TV/
+       may chieu nhung GON LAI mot chut so ban 2x: toan bo khung vien xanh +
+       halo quanh hop thoai luon hien tron ven tren man 1080p (truoc day vien
+       tren/duoi bi che), van dam bao chu lon de doc tu xa. */
+    position: relative; z-index: 1; width: 1060px; max-width: 92vw; max-height: 92vh; overflow-y: auto;
+    padding: 26px 48px 24px; border: 3px solid rgba(30,201,134,.48);
+    border-radius: 26px; background: #111117;
+    box-shadow: 0 26px 90px rgba(0,0,0,.82), 0 0 0 6px rgba(30,201,134,.08);
+    text-align: center;
+}
+.jvhd-pin-logo {
+    color: #1ec986; font-size: 58px; font-weight: 900; letter-spacing: 2px;
+    text-shadow: 0 4px 20px rgba(30,201,134,.38);
+}
+.jvhd-pin-title { margin-top: 5px; font-size: 50px; font-weight: 800; }
+.jvhd-pin-description { margin-top: 8px; color: rgba(255,255,255,.72); font-size: 31px; }
+.jvhd-pin-input {
+    display: block; width: 500px; max-width: 100%; height: 110px; margin: 20px auto 0;
+    padding: 0 30px 0 60px; border: 4px solid rgba(30,201,134,.72);
+    border-radius: 16px; outline: none; background: rgba(255,255,255,.07);
+    color: #fff; font-family: Arial, sans-serif; font-size: 60px; font-weight: 800;
+    line-height: 110px; text-align: center; letter-spacing: 38px; caret-color: transparent;
+    -webkit-text-security: disc;
+}
+.jvhd-pin-input::placeholder { color: rgba(255,255,255,.28); }
+.jvhd-pin-status { min-height: 30px; margin: 12px 0 15px; color: rgba(255,255,255,.67); font-size: 26px; }
+.jvhd-pin-keypad {
+    width: 660px; max-width: 100%; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px;
+}
+.jvhd-pin-key {
+    height: 84px; padding: 0 18px; border: 3px solid rgba(255,255,255,.16);
+    border-radius: 14px; outline: none; background: rgba(255,255,255,.07);
+    color: #fff; font-family: Arial, sans-serif; font-size: 46px; font-weight: 800;
+    transition: transform .1s ease, background .1s ease, border-color .1s ease, box-shadow .1s ease;
+}
+.jvhd-pin-key.focus,
+.jvhd-pin-key:focus {
+    transform: scale(1.05); border-color: #1ec986; background: rgba(30,201,134,.24);
+    box-shadow: 0 0 0 5px rgba(30,201,134,.22); color: #fff;
+}
+.jvhd-pin-delete { color: #ffd479; }
+.jvhd-pin-cancel { color: #ffaaaa; font-size: 31px; }
+.jvhd-pin-help { margin-top: 16px; color: rgba(255,255,255,.48); font-size: 24px; }
+#bintv-jvhd-pin-gate.busy .jvhd-pin-keypad { opacity: .32; pointer-events: none; }
+#bintv-jvhd-pin-gate.busy .jvhd-pin-status { color: #1ec986; }
+@media (max-width: 1280px) {
+    .jvhd-pin-dialog { width: min(860px, 92vw); padding: 22px 36px 20px; }
+    .jvhd-pin-logo { font-size: 44px; }
+    .jvhd-pin-title { font-size: 40px; }
+    .jvhd-pin-description { font-size: 24px; }
+    .jvhd-pin-input { width: 400px; height: 84px; margin-top: 14px; padding: 0 24px 0 46px; font-size: 44px; line-height: 84px; letter-spacing: 28px; }
+    .jvhd-pin-status { margin: 9px 0 11px; font-size: 20px; min-height: 24px; }
+    .jvhd-pin-keypad { width: 480px; gap: 9px; }
+    .jvhd-pin-key { height: 68px; font-size: 34px; }
+    .jvhd-pin-cancel { font-size: 23px; }
+    .jvhd-pin-help { margin-top: 12px; font-size: 19px; }
+}
+
+/* ===================== JVHD quality selector ===================== */
+.jvhd-quality-selector {
+    position: absolute; left: 90px; right: 90px; bottom: 158px; z-index: 14;
+    display: none; align-items: center; justify-content: center; gap: 18px;
+    min-height: 70px; padding: 12px 20px; border-radius: 15px;
+    background: rgba(8,8,12,.90); border: 1px solid rgba(255,255,255,.16);
+    box-shadow: 0 12px 38px rgba(0,0,0,.62); color: #fff;
+}
+.jvhd-quality-selector.show { display: flex; }
+.jvhd-quality-title { font-size: 19px; font-weight: 700; color: rgba(255,255,255,.72); }
+.jvhd-quality-options { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 11px; }
+.jvhd-quality-option {
+    min-width: 126px; height: 48px; padding: 0 17px;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid rgba(255,255,255,.18); border-radius: 10px;
+    background: rgba(255,255,255,.07); color: rgba(255,255,255,.80);
+    font-size: 20px; font-weight: 800;
+}
+.jvhd-quality-option.active {
+    border-color: #1ec986; background: rgba(30,201,134,.20); color: #fff;
+}
+.jvhd-quality-selector.selecting .jvhd-quality-option.focus {
+    transform: scale(1.07); border-color: #fff; background: #fff; color: #111;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.18);
+}
+.jvhd-quality-help { min-width: 240px; color: rgba(255,255,255,.58); font-size: 16px; text-align: left; }
+@media (max-width: 1280px) {
+    .jvhd-quality-selector { left: 55px; right: 55px; bottom: 145px; min-height: 60px; gap: 12px; }
+    .jvhd-quality-title { font-size: 17px; }
+    .jvhd-quality-option { min-width: 105px; height: 42px; font-size: 18px; }
+    .jvhd-quality-help { min-width: 205px; font-size: 14px; }
+}
+
+/* ===== [BinTV USER-AUTH 2026-08] Man Xac thuc Username (hien sau PIN dung) ===== */
+#bintv-jvhd-user-gate {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+    z-index: 380000; display: none; align-items: center; justify-content: center;
+    color: #fff; font-family: Arial, sans-serif;
+}
+#bintv-jvhd-user-gate.show { display: flex; }
+.jvhd-user-backdrop { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,.93); }
+.jvhd-user-dialog {
+    position: relative; z-index: 1; width: 980px; max-width: 92vw; max-height: 92vh; overflow-y: auto;
+    padding: 30px 56px 28px; border: 3px solid rgba(30,201,134,.48); border-radius: 26px;
+    background: #111117; box-shadow: 0 26px 90px rgba(0,0,0,.82), 0 0 0 6px rgba(30,201,134,.08);
+    text-align: center;
+}
+.jvhd-user-logo { color: #1ec986; font-size: 58px; font-weight: 900; letter-spacing: 2px; text-shadow: 0 4px 20px rgba(30,201,134,.38); }
+.jvhd-user-title { margin-top: 5px; font-size: 50px; font-weight: 800; }
+.jvhd-user-description { margin-top: 8px; color: rgba(255,255,255,.72); font-size: 31px; }
+.jvhd-user-input {
+    display: block; width: 640px; max-width: 100%; height: 104px; margin: 22px auto 0;
+    padding: 0 28px; border: 4px solid rgba(30,201,134,.72); border-radius: 16px; outline: none;
+    background: rgba(255,255,255,.07); color: #fff; font-family: Arial, sans-serif;
+    font-size: 42px; font-weight: 700; line-height: 104px; text-align: center; letter-spacing: 4px;
+}
+.jvhd-user-input:focus { border-color: #1ec986; box-shadow: 0 0 0 5px rgba(30,201,134,.22); }
+.jvhd-user-input::placeholder { color: rgba(255,255,255,.28); letter-spacing: normal; }
+.jvhd-user-status { min-height: 32px; margin: 14px 0 18px; color: rgba(255,255,255,.67); font-size: 26px; }
+#bintv-jvhd-user-gate.locked .jvhd-user-status { color: #ff9a9a; font-weight: 700; }
+.jvhd-user-confirm {
+    height: 88px; width: 420px; max-width: 100%; border: 3px solid rgba(30,201,134,.72);
+    border-radius: 16px; outline: none; background: rgba(30,201,134,.2);
+    color: #fff; font-family: Arial, sans-serif; font-size: 40px; font-weight: 800;
+    transition: transform .1s ease, background .1s ease, border-color .1s ease, box-shadow .1s ease;
+}
+.jvhd-user-confirm.focus,
+.jvhd-user-confirm:focus {
+    transform: scale(1.04); border-color: #1ec986; background: rgba(30,201,134,.38);
+    box-shadow: 0 0 0 5px rgba(30,201,134,.25);
+}
+.jvhd-user-help { margin-top: 18px; color: rgba(255,255,255,.48); font-size: 24px; }
+#bintv-jvhd-user-gate.locked .jvhd-user-input,
+#bintv-jvhd-user-gate.locked .jvhd-user-actions { display: none; }
+#bintv-jvhd-user-gate.busy .jvhd-user-input,
+#bintv-jvhd-user-gate.busy .jvhd-user-confirm { opacity: .45; pointer-events: none; }
+@media (max-width: 1280px) {
+    #bintv-jvhd-user-gate .jvhd-user-dialog { width: min(860px, 92vw); padding: 22px 36px 20px; }
+    #bintv-jvhd-user-gate .jvhd-user-logo { font-size: 44px; }
+    #bintv-jvhd-user-gate .jvhd-user-title { font-size: 40px; }
+    #bintv-jvhd-user-gate .jvhd-user-description { font-size: 24px; }
+    #bintv-jvhd-user-gate .jvhd-user-input { width: 480px; height: 84px; font-size: 34px; line-height: 84px; }
+    #bintv-jvhd-user-gate .jvhd-user-status { margin: 9px 0 12px; font-size: 20px; }
+    #bintv-jvhd-user-gate .jvhd-user-confirm { height: 68px; width: 340px; font-size: 30px; }
+    #bintv-jvhd-user-gate .jvhd-user-help { font-size: 20px; }
+}
+
+/* ===== [Windows FONT-VI 2026-09] Sửa chữ tiếng Việt có dấu bị nhỏ/xô lệch
+   trên màn Khóa trẻ em + Nhập tên tài khoản (chạy Windows/Electron).
+   - Arial chỉ có sẵn 400 (thường) và 700 (đậm). Trọng 800/900 là "bold ảo"
+     khiến trình duyệt tự tổng hợp và dễ rơi ký tự tiếng Việt sang font dự
+     phòng (đọc nhỏ/lệch). Ép về 700 = Arial Bold thật, glyph đồng bộ.
+   - Nới line-height một chút để dấu (ắ â ô ơ) không bị cắt mép trên.
+   - Bật làm mịn để nét chữ tiếng Việt sắc hơn. ===== */
+#bintv-jvhd-pin-gate .jvhd-pin-logo,
+#bintv-jvhd-user-gate .jvhd-user-logo,
+#bintv-jvhd-pin-gate .jvhd-pin-title,
+#bintv-jvhd-user-gate .jvhd-user-title,
+#bintv-jvhd-pin-gate .jvhd-pin-input,
+#bintv-jvhd-user-gate .jvhd-user-input,
+#bintv-jvhd-pin-gate .jvhd-pin-key,
+#bintv-jvhd-user-gate .jvhd-user-confirm,
+#bintv-jvhd-pin-gate .jvhd-pin-description,
+#bintv-jvhd-user-gate .jvhd-user-description {
+    font-weight: 700;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-family: "Arial", "Segoe UI", "Tahoma", "Arial Unicode MS", "Noto Sans", sans-serif;
+}
+#bintv-jvhd-pin-gate .jvhd-pin-title,
+#bintv-jvhd-user-gate .jvhd-user-title { line-height: 1.15; padding-bottom: 2px; }
+#bintv-jvhd-pin-gate .jvhd-pin-description,
+#bintv-jvhd-user-gate .jvhd-user-description { line-height: 1.25; }
+#bintv-jvhd-pin-gate .jvhd-pin-status,
+#bintv-jvhd-user-gate .jvhd-user-status,
+#bintv-jvhd-pin-gate .jvhd-pin-help,
+#bintv-jvhd-user-gate .jvhd-user-help { line-height: 1.3; }
