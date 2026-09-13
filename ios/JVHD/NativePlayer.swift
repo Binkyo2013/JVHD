@@ -37,7 +37,7 @@ final class NativePlayer: NSObject, UIAdaptivePresentationControllerDelegate {
 
         let item = AVPlayerItem(url: target)
         let player = AVPlayer(playerItem: item)
-        player.allowsExternalMediaPlayback = true
+        player.allowsExternalPlayback = true
         player.usesExternalPlaybackWhileExternalScreenIsActive = true
 
         let controller = AVPlayerViewController()

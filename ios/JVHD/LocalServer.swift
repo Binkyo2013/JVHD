@@ -510,12 +510,12 @@ final class LocalServer: NSObject {
         let ext = (fileURL.pathExtension.isEmpty ? "" : "." + fileURL.pathExtension).lowercased()
         let contentType = mimeTypes[ext] ?? "application/octet-stream"
         var headers = ["Content-Type": contentType, "Cache-Control": "no-cache"]
-        if data.count > 0 { headers["Content-Length"] = String(data.count) }
+        if payload.count > 0 { headers["Content-Length"] = String(payload.count) }
         if request.method == "HEAD" {
             connection.respond(status: 200, headers: headers, body: Data(), keepAlive: request.isKeepAlive)
             return
         }
-        connection.respond(status: 200, headers: headers, body: data, keepAlive: request.isKeepAlive)
+        connection.respond(status: 200, headers: headers, body: payload, keepAlive: request.isKeepAlive)
     }
 
     // MARK: Chèn lớp tương thích iOS vào trang web
