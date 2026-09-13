@@ -5,7 +5,7 @@ name: Build iOS IPA
 #
 #  · Mặc định build IPA KHÔNG KÝ (unsigned): cài bằng AltStore, SideStore,
 #    Sideloadly, TrollStore hoặc ký lại bằng máy Mac của bạn.
-#  · Nếu bạn có tài khoản Apple Developer: thêm 4 secrets vào repository rồi
+#  · Nếu bạn có tài khoản Apple Developer: thêm secrets vào repository rồi
 #    chạy workflow với "sign = true", IPA sẽ được ký Ad Hoc / Development.
 #
 #  Lấy file:  Actions → workflow run → mục "Artifacts" → JVHD-unsigned-ipa
@@ -58,6 +58,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Secrets KHÔNG dùng được trong biểu thức if:, nên tính thành output.
+      - name: Xác định chế độ ký
+        id: setup
+        env:
+          SIGN_INPUT: ${{ github.event.inputs.sign }}
+          CERT: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+        run: |
+          if [ "$SIGN_INPUT" = "true" ] && [ -n "$CERT" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+            echo "Chế độ: có ký"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "Chế độ: không ký (unsigned IPA)"
+          fi
+
       - name: Chọn Xcode
         run: |
           XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
@@ -72,10 +87,11 @@ jobs:
           ls -la ios/JVHD
           test -f ios/JVHD.xcodeproj/project.pbxproj || { echo "::error::Thiếu project.pbxproj"; exit 1; }
           test -d www || { echo "::error::Thiếu thư mục www"; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print' ios/JVHD/Info.plist | head -20
 
-      # ---------------------------------------------------------------- ký
-      - name: Nhập chứng thư & provisioning profile (chỉ khi bật ký)
-        if: ${{ github.event.inputs.sign == 'true' && secrets.APPLE_CERTIFICATE_BASE64 != '' }}
+      # ---------------------------------------------------------------- ký --
+      - name: Nhập chứng thư & provisioning profile
+        if: steps.setup.outputs.sign == 'true'
         env:
           CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -92,8 +108,7 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
@@ -101,18 +116,24 @@ jobs:
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
           echo "Đã nhập chứng thư + profile"
 
-      # ------------------------------------------------------------- build
+      # ------------------------------------------------------------- build --
       - name: Archive
+        env:
+          SIGN: ${{ steps.setup.outputs.sign }}
+          CERT: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          SIGN_IDENTITY: ${{ secrets.APPLE_CODE_SIGN_IDENTITY }}
+          PROFILE_NAME: ${{ secrets.APPLE_PROVISIONING_PROFILE_NAME }}
         run: |
           set -o pipefail
-          if [ "${{ github.event.inputs.sign }}" = "true" ] && [ -n "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ]; then
+          if [ "$SIGN" = "true" ] && [ -n "$CERT" ]; then
             echo "→ Build CÓ KÝ"
+            IDENTITY="${SIGN_IDENTITY:-Apple Distribution}"
             xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIGURATION" \
               -sdk iphoneos \
               -archivePath build/JVHD.xcarchive archive \
               CODE_SIGN_STYLE=Manual \
-              CODE_SIGN_IDENTITY="${{ secrets.APPLE_CODE_SIGN_IDENTITY || 'Apple Distribution' }}" \
-              PROVISIONING_PROFILE_SPECIFIER="${{ secrets.APPLE_PROVISIONING_PROFILE_NAME }}" \
+              CODE_SIGN_IDENTITY="$IDENTITY" \
+              PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
               -allowProvisioningUpdates 2>&1 | tee build.log
           else
             echo "→ Build KHÔNG KÝ (unsigned IPA — cài bằng AltStore/Sideloadly/TrollStore)"
@@ -124,14 +145,15 @@ jobs:
 
       - name: Hiển thị lỗi build (nếu có)
         if: failure()
-        run: |
-          grep -E "error:|warning: .*deprecated|\\*\\* BUILD FAILED \\*\\*" build.log | head -60 || true
+        run: grep -E "error:|\\*\\* BUILD FAILED \\*\\*" build.log | head -60 || true
 
-      # ------------------------------------------------------------ đóng gói
+      # ---------------------------------------------------------- đóng gói --
       - name: Đóng gói JVHD.ipa
+        env:
+          SIGN: ${{ steps.setup.outputs.sign }}
         run: |
           set -e
-          if [ "${{ github.event.inputs.sign }}" = "true" ] && [ -n "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ]; then
+          if [ "$SIGN" = "true" ]; then
             xcodebuild -exportArchive -archivePath build/JVHD.xcarchive \
               -exportPath build/export -exportOptionsPlist ios/ExportOptions.plist \
               -allowProvisioningUpdates
@@ -142,27 +164,30 @@ jobs:
             rm -rf build/Payload
             mkdir -p build/Payload
             cp -R "$APP" build/Payload/
-            IPA="JVHD.ipa"
-            rm -f "$IPA"
-            (cd build && zip -qry "../$IPA" Payload)
+            rm -f JVHD.ipa
+            (cd build && zip -qry ../JVHD.ipa Payload)
+            IPA=JVHD.ipa
           fi
           cp "$IPA" JVHD.ipa
           ls -lh JVHD.ipa
-          mkdir -p build/export && cp JVHD.ipa build/export/JVHD.ipa
 
       - name: Thông tin gói
+        env:
+          SIGN: ${{ steps.setup.outputs.sign }}
         run: |
           set -e
           APP=$(find build/JVHD.xcarchive/Products/Applications -maxdepth 1 -name "*.app" | head -1)
-          echo "### JVHD.ipa" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- Cấu hình: \`${{ env.CONFIGURATION }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Ký: \`${{ github.event.inputs.sign == 'true' && 'có' || 'không (unsigned)' }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Deployment target: \`$(/usr/libexec/PlistBuddy -c 'Print MinimumOSVersion' "$APP/Info.plist")\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Phiên bản: \`$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Info.plist")\` (\`$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Info.plist")\`)" >> $GITHUB_STEP_SUMMARY
-          echo "- Bundle id: \`$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Kiến trúc: \`$(lipo -archs "$APP/JVHD" 2>/dev/null || echo 'n/a')\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Dung lượng: \`$(du -h JVHD.ipa | cut -f1)\`" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### 📦 JVHD.ipa"
+            echo ""
+            echo "- Cấu hình: \`$CONFIGURATION\`"
+            if [ "$SIGN" = "true" ]; then echo "- Ký: \`có\`"; else echo "- Ký: \`không (unsigned)\`"; fi
+            echo "- Deployment target: \`$(/usr/libexec/PlistBuddy -c 'Print MinimumOSVersion' "$APP/Info.plist")\`"
+            echo "- Phiên bản: \`$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Info.plist")\` (\`$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Info.plist")\`)"
+            echo "- Bundle id: \`$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")\`"
+            echo "- Kiến trúc: \`$(lipo -archs "$APP/JVHD" 2>/dev/null || echo 'n/a')\`"
+            echo "- Dung lượng: \`$(du -h JVHD.ipa | cut -f1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Tải IPA lên artifact
         uses: actions/upload-artifact@v4
@@ -174,4 +199,4 @@ jobs:
 
       - name: Dọn keychain
         if: always()
-        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
+        run: security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
