@@ -126,12 +126,14 @@ def build():
           "includeInIndex = 0; path = JVHD.app; sourceTree = BUILT_PRODUCTS_DIR; };" % product_ref)
     b.add("\t\t%s /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; "
           "name = Info.plist; path = JVHD/Info.plist; sourceTree = \"<group>\"; };" % info_plist_ref)
+    # Các file nguồn nằm TRONG group "JVHD" (group có path = JVHD) nên path chỉ
+    # được ghi tên file — nếu ghi "JVHD/Ten.swift" sẽ thành ios/JVHD/JVHD/...
     for name, file_ref, _build in sources:
         b.add("\t\t%s /* %s */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; "
-              "name = %s; path = JVHD/%s; sourceTree = \"<group>\"; };" % (file_ref, name, name, name))
+              "path = %s; sourceTree = \"<group>\"; };" % (file_ref, name, name))
     for name, file_ref, _build in resources:
         b.add("\t\t%s /* %s */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; "
-              "name = %s; path = JVHD/%s; sourceTree = \"<group>\"; };" % (file_ref, name, name, name))
+              "path = %s; sourceTree = \"<group>\"; };" % (file_ref, name, name))
     for name, path, file_ref, _build in folders:
         b.add("\t\t%s /* %s */ = {isa = PBXFileReference; lastKnownFileType = folder; "
               "name = %s; path = %s; sourceTree = \"<group>\"; };" % (file_ref, name, name, path))

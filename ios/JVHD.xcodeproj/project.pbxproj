@@ -24,17 +24,17 @@
 /* Begin PBXFileReference section */
 		1A2B3C4E0000000000000006 /* JVHD.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JVHD.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4E0000000000000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = JVHD/Info.plist; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000011 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = JVHD/AppDelegate.swift; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000013 /* LaunchViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LaunchViewController.swift; path = JVHD/LaunchViewController.swift; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000015 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MainViewController.swift; path = JVHD/MainViewController.swift; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000017 /* NativePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativePlayer.swift; path = JVHD/NativePlayer.swift; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000019 /* LocalServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalServer.swift; path = JVHD/LocalServer.swift; sourceTree = "<group>"; };
-		1A2B3C4E000000000000001B /* HTTPRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HTTPRequest.swift; path = JVHD/HTTPRequest.swift; sourceTree = "<group>"; };
-		1A2B3C4E000000000000001D /* MediaProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MediaProxy.swift; path = JVHD/MediaProxy.swift; sourceTree = "<group>"; };
-		1A2B3C4E000000000000001F /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DeviceKey.swift; path = JVHD/DeviceKey.swift; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000021 /* Crypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Crypto.swift; path = JVHD/Crypto.swift; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000023 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Config.swift; path = JVHD/Config.swift; sourceTree = "<group>"; };
-		1A2B3C4E0000000000000025 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = JVHD/Assets.xcassets; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000011 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000013 /* LaunchViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchViewController.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000015 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000017 /* NativePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePlayer.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000019 /* LocalServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServer.swift; sourceTree = "<group>"; };
+		1A2B3C4E000000000000001B /* HTTPRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPRequest.swift; sourceTree = "<group>"; };
+		1A2B3C4E000000000000001D /* MediaProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaProxy.swift; sourceTree = "<group>"; };
+		1A2B3C4E000000000000001F /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceKey.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000021 /* Crypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Crypto.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000023 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000025 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A2B3C4E0000000000000027 /* www */ = {isa = PBXFileReference; lastKnownFileType = folder; name = www; path = ../www; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
