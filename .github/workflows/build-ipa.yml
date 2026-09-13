@@ -40,6 +40,10 @@ on:
       - 'www/**'
       - '.github/workflows/build-ipa.yml'
 
+permissions:
+  contents: read
+  pull-requests: write
+
 concurrency:
   group: build-ipa-${{ github.ref }}
   cancel-in-progress: true
@@ -145,7 +149,49 @@ jobs:
 
       - name: Hiển thị lỗi build (nếu có)
         if: failure()
-        run: grep -E "error:|\\*\\* BUILD FAILED \\*\\*" build.log | head -60 || true
+        run: |
+          echo "================= 50 LỖI ĐẦU TIÊN ================="
+          grep -E "error:|error :|BUILD FAILED|fatal error:|note: " build.log | head -50 || true
+          echo "================= 80 DÒNG CUỐI ==================="
+          tail -80 build.log || true
+
+      - name: Đăng lỗi build lên PR (để dễ theo dõi)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "### ❌ Build iOS thất bại"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA:0:7}\`"
+            echo "- Workflow run: [\#${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID})"
+            echo ""
+            echo "<details open><summary>Chi tiết lỗi biên dịch</summary>"
+            echo ""
+            echo '```'
+            grep -E "error:|error :|BUILD FAILED|fatal error:" build.log 2>/dev/null | head -60
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details><summary>80 dòng cuối build.log</summary>"
+            echo ""
+            echo '```'
+            tail -80 build.log 2>/dev/null
+            echo '```'
+            echo "</details>"
+          } > /tmp/build-report.md
+          PR_NUMBER="$PR"
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh pr list --repo "$REPO" --head "$GITHUB_REF_NAME" --json number --jq '.[0].number')
+          fi
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file /tmp/build-report.md || true
+          else
+            echo "Không tìm thấy PR để đăng báo cáo."
+          fi
 
       # ---------------------------------------------------------- đóng gói --
       - name: Đóng gói JVHD.ipa

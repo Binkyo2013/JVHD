@@ -377,6 +377,87 @@ def build():
     return "\n".join(b.lines) + "\n"
 
 
+SCHEME_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "1500"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES">
+      <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "{target}"
+               BuildableName = "JVHD.app"
+               BlueprintName = "JVHD"
+               ReferencedContainer = "container:JVHD.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "YES">
+      <Testables>
+      </Testables>
+   </TestAction>
+   <LaunchAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "NO"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "{target}"
+            BuildableName = "JVHD.app"
+            BlueprintName = "JVHD"
+            ReferencedContainer = "container:JVHD.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "Release"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "{target}"
+            BuildableName = "JVHD.app"
+            BlueprintName = "JVHD"
+            ReferencedContainer = "container:JVHD.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction
+      buildConfiguration = "Debug">
+   </AnalyzeAction>
+   <ArchiveAction
+      buildConfiguration = "Release"
+      revealArchiveInOrganizer = "YES">
+   </ArchiveAction>
+</Scheme>
+"""
+
+
 def main():
     content = build()
     os.makedirs(PROJECT_DIR, exist_ok=True)
@@ -384,6 +465,16 @@ def main():
     with open(target, "w", encoding="utf-8") as handle:
         handle.write(content)
     print("Đã sinh %s (%d dòng)" % (target, content.count("\n")))
+
+    # Scheme dùng chung (shared) để `xcodebuild -scheme JVHD` hoạt động chắc chắn
+    # trên máy build — Xcode không tự tạo scheme khi chạy bằng dòng lệnh.
+    target_id = "1A2B3C4E%016X" % 5
+    scheme_dir = os.path.join(PROJECT_DIR, "xcshareddata", "xcschemes")
+    os.makedirs(scheme_dir, exist_ok=True)
+    scheme_path = os.path.join(scheme_dir, "JVHD.xcscheme")
+    with open(scheme_path, "w", encoding="utf-8") as handle:
+        handle.write(SCHEME_TEMPLATE.format(target=target_id))
+    print("Đã sinh %s" % scheme_path)
     return 0
 
 
