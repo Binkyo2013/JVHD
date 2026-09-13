@@ -1,0 +1,314 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1A2B3C4E0000000000000012 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000011 /* AppDelegate.swift */; };
+		1A2B3C4E0000000000000014 /* LaunchViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000013 /* LaunchViewController.swift */; };
+		1A2B3C4E0000000000000016 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000015 /* MainViewController.swift */; };
+		1A2B3C4E0000000000000018 /* NativePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000017 /* NativePlayer.swift */; };
+		1A2B3C4E000000000000001A /* LocalServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000019 /* LocalServer.swift */; };
+		1A2B3C4E000000000000001C /* HTTPRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000001B /* HTTPRequest.swift */; };
+		1A2B3C4E000000000000001E /* MediaProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000001D /* MediaProxy.swift */; };
+		1A2B3C4E0000000000000020 /* DeviceKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E000000000000001F /* DeviceKey.swift */; };
+		1A2B3C4E0000000000000022 /* Crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000021 /* Crypto.swift */; };
+		1A2B3C4E0000000000000024 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000023 /* Config.swift */; };
+		1A2B3C4E0000000000000026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000025 /* Assets.xcassets */; };
+		1A2B3C4E0000000000000028 /* www in Resources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4E0000000000000027 /* www */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1A2B3C4E0000000000000006 /* JVHD.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JVHD.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A2B3C4E0000000000000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = JVHD/Info.plist; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000011 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000013 /* LaunchViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchViewController.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000015 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000017 /* NativePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePlayer.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000019 /* LocalServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServer.swift; sourceTree = "<group>"; };
+		1A2B3C4E000000000000001B /* HTTPRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPRequest.swift; sourceTree = "<group>"; };
+		1A2B3C4E000000000000001D /* MediaProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaProxy.swift; sourceTree = "<group>"; };
+		1A2B3C4E000000000000001F /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceKey.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000021 /* Crypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Crypto.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000023 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000025 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1A2B3C4E0000000000000027 /* www */ = {isa = PBXFileReference; lastKnownFileType = folder; name = www; path = ../www; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1A2B3C4E0000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1A2B3C4E0000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4E0000000000000010 /* Info.plist */,
+				1A2B3C4E0000000000000027 /* www */,
+				1A2B3C4E0000000000000004 /* JVHD */,
+				1A2B3C4E0000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1A2B3C4E0000000000000004 /* JVHD */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4E0000000000000011 /* AppDelegate.swift */,
+				1A2B3C4E0000000000000013 /* LaunchViewController.swift */,
+				1A2B3C4E0000000000000015 /* MainViewController.swift */,
+				1A2B3C4E0000000000000017 /* NativePlayer.swift */,
+				1A2B3C4E0000000000000019 /* LocalServer.swift */,
+				1A2B3C4E000000000000001B /* HTTPRequest.swift */,
+				1A2B3C4E000000000000001D /* MediaProxy.swift */,
+				1A2B3C4E000000000000001F /* DeviceKey.swift */,
+				1A2B3C4E0000000000000021 /* Crypto.swift */,
+				1A2B3C4E0000000000000023 /* Config.swift */,
+				1A2B3C4E0000000000000025 /* Assets.xcassets */,
+			);
+			name = JVHD;
+			path = JVHD;
+			sourceTree = "<group>";
+		};
+		1A2B3C4E0000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1A2B3C4E0000000000000006 /* JVHD.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1A2B3C4E0000000000000005 /* JVHD */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A2B3C4E000000000000000D /* Build configuration list for PBXNativeTarget "JVHD" */;
+			buildPhases = (
+				1A2B3C4E0000000000000007 /* Sources */,
+				1A2B3C4E0000000000000009 /* Frameworks */,
+				1A2B3C4E0000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JVHD;
+			productName = JVHD;
+			productReference = 1A2B3C4E0000000000000006 /* JVHD.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1A2B3C4E0000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					1A2B3C4E0000000000000005 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 1A2B3C4E000000000000000A /* Build configuration list for PBXProject "JVHD" */;
+			compatibilityVersion = "Xcode 14.0";
+		developmentRegion = vi;
+		hasScannedForEncodings = 0;
+		knownRegions = (
+			en,
+			Base,
+			vi,
+		);
+		mainGroup = 1A2B3C4E0000000000000002;
+		productRefGroup = 1A2B3C4E0000000000000003 /* Products */;
+		projectDirPath = "";
+		projectRoot = "";
+		targets = (
+			1A2B3C4E0000000000000005 /* JVHD */,
+		);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1A2B3C4E0000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4E0000000000000028 /* www in Resources */,
+				1A2B3C4E0000000000000026 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1A2B3C4E0000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A2B3C4E0000000000000012 /* AppDelegate.swift in Sources */,
+				1A2B3C4E0000000000000014 /* LaunchViewController.swift in Sources */,
+				1A2B3C4E0000000000000016 /* MainViewController.swift in Sources */,
+				1A2B3C4E0000000000000018 /* NativePlayer.swift in Sources */,
+				1A2B3C4E000000000000001A /* LocalServer.swift in Sources */,
+				1A2B3C4E000000000000001C /* HTTPRequest.swift in Sources */,
+				1A2B3C4E000000000000001E /* MediaProxy.swift in Sources */,
+				1A2B3C4E0000000000000020 /* DeviceKey.swift in Sources */,
+				1A2B3C4E0000000000000022 /* Crypto.swift in Sources */,
+				1A2B3C4E0000000000000024 /* Config.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1A2B3C4E000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		1A2B3C4E000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		1A2B3C4E000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JVHD/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"$(inherited)",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = vn.jvhd.ios;
+				PRODUCT_NAME = JVHD;
+				SKIP_INSTALL = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		1A2B3C4E000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JVHD/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"$(inherited)",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = vn.jvhd.ios;
+				PRODUCT_NAME = JVHD;
+				SKIP_INSTALL = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1A2B3C4E000000000000000A /* Build configuration list for PBXProject "JVHD" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4E000000000000000B /* Debug */,
+				1A2B3C4E000000000000000C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A2B3C4E000000000000000D /* Build configuration list for PBXNativeTarget "JVHD" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4E000000000000000E /* Debug */,
+				1A2B3C4E000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1A2B3C4E0000000000000001 /* Project object */;
+}

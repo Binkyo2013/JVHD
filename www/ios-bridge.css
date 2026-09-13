@@ -1,0 +1,83 @@
+/* ==========================================================================
+   ios-bridge.css — LỚP TƯƠNG THÍCH IOS CHO GIAO DIỆN WEB JVHD
+   ==========================================================================
+   Giao diện gốc được thiết kế cho TV 1920x1080 nên file này chỉ bổ sung
+   những gì cần thiết để chạy đúng chuẩn trên iPhone:
+
+     · Vùng an toàn (safe-area): tránh notch, tai thỏ, home indicator.
+     · Cảm ứng: bỏ highlight xanh, tăng vùng bấm, cuộn mượt.
+     · Không tràn viền: overlay toàn màn hình tự lùi vào vùng an toàn.
+
+   File này CHỈ được chèn vào index.html bởi máy chủ cục bộ của app iOS
+   (xem LocalServer.injectIOSRuntime), vì vậy bản Windows/Electron không bị
+   ảnh hưởng. Mọi luật đều khoá bởi class "jvhd-ios" (do ios-bridge.js gắn).
+   ========================================================================== */
+
+html.jvhd-ios,
+html.jvhd-ios body {
+    background: #07070a;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Vùng an toàn: nội dung trong luồng thường (normal flow) */
+html.jvhd-ios body {
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    box-sizing: border-box;
+}
+
+/* Lớp phủ toàn màn hình (position: fixed) KHÔNG ăn padding của body
+   -> tự lùi vào trong vùng an toàn để không bị notch che. */
+html.jvhd-ios #bintv-jvhd-screen,
+html.jvhd-ios #bintv-jvhd-pin-gate,
+html.jvhd-ios #bintv-jvhd-user-gate,
+html.jvhd-ios #bintv-movie-browser,
+html.jvhd-ios #bintv-movie-player,
+html.jvhd-ios #bintv-exit-modal,
+html.jvhd-ios #bintv-app-menu {
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    box-sizing: border-box;
+}
+
+/* Các thành phần dính mép dưới (thanh chất lượng, thông báo) */
+html.jvhd-ios #bintv-jvhd-quality-selector { bottom: calc(28px + env(safe-area-inset-bottom)); }
+html.jvhd-ios #bintv-toast { bottom: calc(28px + env(safe-area-inset-bottom)); }
+
+/* Thao tác cảm ứng */
+html.jvhd-ios button,
+html.jvhd-ios input,
+html.jvhd-ios .jvhd-pin-key,
+html.jvhd-ios .jvhd-card,
+html.jvhd-ios .jvhd-sidebar-item,
+html.jvhd-ios .jvhd-source-row {
+    touch-action: manipulation;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Cuộn bằng cảm ứng mượt, ẩn thanh cuộn kiểu desktop */
+html.jvhd-ios ::-webkit-scrollbar { width: 0; height: 0; }
+html.jvhd-ios .jvhd-grid,
+html.jvhd-ios .jvhd-sidebar,
+html.jvhd-ios .jvhd-content {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+/* Video luôn vừa khung, không tràn viền */
+html.jvhd-ios video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    background: #000;
+}

@@ -1,0 +1,249 @@
+name: Build iOS IPA
+
+# ============================================================================
+#  Đóng gói JVHD thành file .ipa bằng GitHub Actions (macOS runner).
+#
+#  · Mặc định build IPA KHÔNG KÝ (unsigned): cài bằng AltStore, SideStore,
+#    Sideloadly, TrollStore hoặc ký lại bằng máy Mac của bạn.
+#  · Nếu bạn có tài khoản Apple Developer: thêm secrets vào repository rồi
+#    chạy workflow với "sign = true", IPA sẽ được ký Ad Hoc / Development.
+#
+#  Lấy file:  Actions → workflow run → mục "Artifacts" → JVHD-unsigned-ipa
+#  hoặc:      gh run download <run-id> -n JVHD-unsigned-ipa
+# ============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Cấu hình build'
+        required: true
+        default: 'Release'
+        type: choice
+        options:
+          - Release
+          - Debug
+      sign:
+        description: 'Ký IPA bằng chứng thư Apple (cần secrets)'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'www/**'
+      - '.github/workflows/build-ipa.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'www/**'
+      - '.github/workflows/build-ipa.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & đóng gói JVHD.ipa
+    runs-on: macos-15
+
+    env:
+      PROJECT: ios/JVHD.xcodeproj
+      SCHEME: JVHD
+      CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Secrets KHÔNG dùng được trong biểu thức if:, nên tính thành output.
+      - name: Xác định chế độ ký
+        id: setup
+        env:
+          SIGN_INPUT: ${{ github.event.inputs.sign }}
+          CERT: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+        run: |
+          if [ "$SIGN_INPUT" = "true" ] && [ -n "$CERT" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+            echo "Chế độ: có ký"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "Chế độ: không ký (unsigned IPA)"
+          fi
+
+      - name: Chọn Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Dùng $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          swift --version
+
+      - name: Kiểm tra cấu trúc dự án
+        run: |
+          ls -la ios
+          ls -la ios/JVHD
+          test -f ios/JVHD.xcodeproj/project.pbxproj || { echo "::error::Thiếu project.pbxproj"; exit 1; }
+          test -d www || { echo "::error::Thiếu thư mục www"; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print' ios/JVHD/Info.plist | head -20
+
+      # ---------------------------------------------------------------- ký --
+      - name: Nhập chứng thư & provisioning profile
+        if: steps.setup.outputs.sign == 'true'
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: jvhd-build-keychain
+        run: |
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+          echo "Đã nhập chứng thư + profile"
+
+      # ------------------------------------------------------------- build --
+      - name: Archive
+        env:
+          SIGN: ${{ steps.setup.outputs.sign }}
+          CERT: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          SIGN_IDENTITY: ${{ secrets.APPLE_CODE_SIGN_IDENTITY }}
+          PROFILE_NAME: ${{ secrets.APPLE_PROVISIONING_PROFILE_NAME }}
+        run: |
+          set -o pipefail
+          if [ "$SIGN" = "true" ] && [ -n "$CERT" ]; then
+            echo "→ Build CÓ KÝ"
+            IDENTITY="${SIGN_IDENTITY:-Apple Distribution}"
+            xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIGURATION" \
+              -sdk iphoneos \
+              -archivePath build/JVHD.xcarchive archive \
+              CODE_SIGN_STYLE=Manual \
+              CODE_SIGN_IDENTITY="$IDENTITY" \
+              PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+              -allowProvisioningUpdates 2>&1 | tee build.log
+          else
+            echo "→ Build KHÔNG KÝ (unsigned IPA — cài bằng AltStore/Sideloadly/TrollStore)"
+            xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIGURATION" \
+              -sdk iphoneos \
+              -archivePath build/JVHD.xcarchive archive \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee build.log
+          fi
+
+      - name: Hiển thị lỗi build (nếu có)
+        if: failure()
+        run: |
+          echo "================= 50 LỖI ĐẦU TIÊN ================="
+          grep -E "error:|error :|BUILD FAILED|fatal error:|note: " build.log | head -50 || true
+          echo "================= 80 DÒNG CUỐI ==================="
+          tail -80 build.log || true
+
+      - name: Đăng lỗi build lên PR (để dễ theo dõi)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "### ❌ Build iOS thất bại"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA:0:7}\`"
+            echo "- Workflow run: [\#${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID})"
+            echo ""
+            echo "<details open><summary>Chi tiết lỗi biên dịch</summary>"
+            echo ""
+            echo '```'
+            grep -E "error:|error :|BUILD FAILED|fatal error:" build.log 2>/dev/null | head -60
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details><summary>80 dòng cuối build.log</summary>"
+            echo ""
+            echo '```'
+            tail -80 build.log 2>/dev/null
+            echo '```'
+            echo "</details>"
+          } > /tmp/build-report.md
+          PR_NUMBER="$PR"
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh pr list --repo "$REPO" --head "$GITHUB_REF_NAME" --json number --jq '.[0].number')
+          fi
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file /tmp/build-report.md || true
+          else
+            echo "Không tìm thấy PR để đăng báo cáo."
+          fi
+
+      # ---------------------------------------------------------- đóng gói --
+      - name: Đóng gói JVHD.ipa
+        env:
+          SIGN: ${{ steps.setup.outputs.sign }}
+        run: |
+          set -e
+          if [ "$SIGN" = "true" ]; then
+            xcodebuild -exportArchive -archivePath build/JVHD.xcarchive \
+              -exportPath build/export -exportOptionsPlist ios/ExportOptions.plist \
+              -allowProvisioningUpdates
+            IPA=$(find build/export -maxdepth 1 -name "*.ipa" | head -1)
+          else
+            APP=$(find build/JVHD.xcarchive/Products/Applications -maxdepth 1 -name "*.app" | head -1)
+            echo "App: $APP"
+            rm -rf build/Payload
+            mkdir -p build/Payload
+            cp -R "$APP" build/Payload/
+            rm -f JVHD.ipa
+            (cd build && zip -qry ../JVHD.ipa Payload)
+            IPA=JVHD.ipa
+          fi
+          if [ "$IPA" != "JVHD.ipa" ]; then cp "$IPA" JVHD.ipa; fi
+          ls -lh JVHD.ipa
+          unzip -l JVHD.ipa | head -5
+
+      - name: Thông tin gói
+        env:
+          SIGN: ${{ steps.setup.outputs.sign }}
+        run: |
+          set -e
+          APP=$(find build/JVHD.xcarchive/Products/Applications -maxdepth 1 -name "*.app" | head -1)
+          {
+            echo "### 📦 JVHD.ipa"
+            echo ""
+            echo "- Cấu hình: \`$CONFIGURATION\`"
+            if [ "$SIGN" = "true" ]; then echo "- Ký: \`có\`"; else echo "- Ký: \`không (unsigned)\`"; fi
+            echo "- Deployment target: \`$(/usr/libexec/PlistBuddy -c 'Print MinimumOSVersion' "$APP/Info.plist")\`"
+            echo "- Phiên bản: \`$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Info.plist")\` (\`$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Info.plist")\`)"
+            echo "- Bundle id: \`$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")\`"
+            echo "- Kiến trúc: \`$(lipo -archs "$APP/JVHD" 2>/dev/null || echo 'n/a')\`"
+            echo "- Dung lượng: \`$(du -h JVHD.ipa | cut -f1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tải IPA lên artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JVHD-unsigned-ipa
+          path: JVHD.ipa
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Dọn keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
