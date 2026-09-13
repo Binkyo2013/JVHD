@@ -9,6 +9,27 @@ viết bằng Swift** để thay thế hoàn toàn phần Node.js/Electron của
 > sửa gì trong `www/` ngoài 2 tệp mới (`ios-bridge.js`, `ios-bridge.css`) vốn
 > chỉ được kích hoạt khi chạy trong app iOS.
 
+## 0. Trạng thái build
+
+| Mục | Giá trị |
+|---|---|
+| Workflow | `.github/workflows/build-ipa.yml` (chạy khi push `main` / PR / `workflow_dispatch`) |
+| Runner | `macos-15` — Xcode 26.3 |
+| Kết quả | ✅ **BUILD SUCCEEDED** (archive + đóng gói + upload artifact) |
+| Artifact | `JVHD-unsigned-ipa` (~421 KB, lưu 30 ngày) |
+| Sản phẩm | `Payload/JVHD.app` → `JVHD.ipa` (chưa ký) |
+| Deployment target | iOS 16.0+ · bundle id `vn.jvhd.ios` · arm64 |
+
+Tải về: **Actions → run mới nhất → mục Artifacts → `JVHD-unsigned-ipa`**, hoặc
+
+```bash
+gh run download --repo Binkyo2013/JVHD <run-id> -n JVHD-unsigned-ipa
+```
+
+> Swift đã được **biên dịch thành công trên macOS** qua CI. Môi trường phát triển
+> là Linux nên chưa chạy thử trên máy thật; phần runtime (WebView, phát luồng,
+> xác thực) cần kiểm tra lần đầu trên thiết bị.
+
 ## 1. Kiến trúc
 
 ```
