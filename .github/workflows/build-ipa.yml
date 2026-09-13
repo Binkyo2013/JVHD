@@ -214,8 +214,9 @@ jobs:
             (cd build && zip -qry ../JVHD.ipa Payload)
             IPA=JVHD.ipa
           fi
-          cp "$IPA" JVHD.ipa
+          if [ "$IPA" != "JVHD.ipa" ]; then cp "$IPA" JVHD.ipa; fi
           ls -lh JVHD.ipa
+          unzip -l JVHD.ipa | head -5
 
       - name: Thông tin gói
         env:
