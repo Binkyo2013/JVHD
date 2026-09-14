@@ -41,7 +41,7 @@ on:
       - '.github/workflows/build-ipa.yml'
 
 permissions:
-  contents: read
+  contents: write        # cần để tạo/cập nhật GitHub Release chứa JVHD.ipa
   pull-requests: write
 
 concurrency:
@@ -243,6 +243,98 @@ jobs:
           path: JVHD.ipa
           retention-days: 30
           if-no-files-found: error
+
+      # -------------------------------------------------- link tải công khai --
+      #  Artifact của Actions bắt buộc phải đăng nhập GitHub + dùng máy tính
+      #  mới tải thuận tiện. Bước này đăng IPA lên GitHub Release để có một
+      #  link HTTPS cố định, bấm là tải ngay trên trình duyệt điện thoại:
+      #
+      #    https://github.com/<repo>/releases/download/ipa-latest/JVHD.ipa
+      #
+      #  Release dùng tag cuốn chiếu "ipa-latest" nên link không bao giờ đổi;
+      #  file IPA của lần build mới nhất luôn ghi đè lên file cũ.
+      - name: Đăng IPA lên GitHub Release (link tải cho điện thoại)
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SIGN: ${{ steps.setup.outputs.sign }}
+        run: |
+          set -e
+          TAG="ipa-latest"
+          APP=$(find build/JVHD.xcarchive/Products/Applications -maxdepth 1 -name "*.app" | head -1)
+          pb() { /usr/libexec/PlistBuddy -c "Print $1" "$APP/Info.plist" 2>/dev/null || echo "n/a"; }
+          VER=$(pb CFBundleShortVersionString)
+          BLD=$(pb CFBundleVersion)
+          IOS=$(pb MinimumOSVersion)
+          BID=$(pb CFBundleIdentifier)
+          ARCH=$(lipo -archs "$APP/JVHD" 2>/dev/null || echo "n/a")
+          SIZE=$(du -h JVHD.ipa | cut -f1)
+          SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "${GITHUB_SHA:0:7}")
+          if [ "$SIGN" = "true" ]; then
+            SIGNTXT="có ký bằng chứng thư Apple"
+          else
+            SIGNTXT="**không ký** — phải cài qua AltStore / SideStore / Sideloadly / TrollStore"
+          fi
+          URL="https://github.com/$REPO/releases/download/$TAG/JVHD.ipa"
+
+          {
+            echo "Bản đóng gói JVHD cho iOS — **tự cập nhật sau mỗi lần build trên \`main\`**."
+            echo ""
+            echo "## ⬇️ Tải xuống"
+            echo ""
+            echo "$URL"
+            echo ""
+            echo "Bấm link trên bằng trình duyệt (điện thoại hay máy tính đều được) là tải về"
+            echo "file \`JVHD.ipa\`. Không cần đăng nhập, không cần cài \`gh\`/\`git\`."
+            echo ""
+            echo "## 📋 Thông tin gói"
+            echo ""
+            echo "| Mục | Giá trị |"
+            echo "|---|---|"
+            echo "| Phiên bản | \`$VER\` (build \`$BLD\`) |"
+            echo "| Bundle id | \`$BID\` |"
+            echo "| iOS tối thiểu | \`$IOS\` |"
+            echo "| Kiến trúc | \`$ARCH\` |"
+            echo "| Dung lượng | \`$SIZE\` |"
+            echo "| Ký | $SIGNTXT |"
+            echo "| Commit | \`$SHA\` |"
+            echo "| Lần build | [#${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID}) |"
+            echo "| Ngày đóng gói | $(date -u '+%Y-%m-%d %H:%M UTC') |"
+            echo ""
+            echo "## 📱 Cài lên iPhone"
+            echo ""
+            echo "IPA **không ký** thì iOS không cho cài bằng cách mở trực tiếp file. Chọn 1 cách:"
+            echo ""
+            echo "* **TrollStore** — cài thẳng từ Safari trên điện thoại, vĩnh viễn, nhưng chỉ"
+            echo "  hoạt động ở một số phiên bản iOS (14.0–16.6.1, và 17.0 tuỳ bản)."
+            echo "* **AltStore / SideStore / Sideloadly** — cần một máy tính để cài lần đầu,"
+            echo "  Apple ID miễn phí, ứng dụng hết hạn sau 7 ngày."
+            echo "* **Ký Ad Hoc / TestFlight** — cần tài khoản Apple Developer trả phí; thêm"
+            echo "  secrets vào repository rồi chạy workflow với \`sign = true\`."
+          } > /tmp/release-notes.md
+
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$REPO" \
+              --title "JVHD.ipa — bản mới nhất ($VER build $BLD)" \
+              --notes-file /tmp/release-notes.md
+            echo "Đã cập nhật release $TAG"
+          else
+            gh release create "$TAG" --repo "$REPO" \
+              --title "JVHD.ipa — bản mới nhất ($VER build $BLD)" \
+              --notes-file /tmp/release-notes.md \
+              --target "$GITHUB_SHA"
+            echo "Đã tạo release $TAG"
+          fi
+
+          gh release upload "$TAG" JVHD.ipa --repo "$REPO" --clobber
+          echo "LINK_TAI_IPA=$URL" >> "$GITHUB_ENV"
+          {
+            echo ""
+            echo "### 🔗 Link tải IPA (bấm là tải, dùng được trên điện thoại)"
+            echo ""
+            echo "$URL"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Dọn keychain
         if: always()

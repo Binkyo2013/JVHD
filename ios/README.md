@@ -81,13 +81,27 @@ chéo nguồn tự đi qua proxy cục bộ, đồng thời `responseURL` đư�
 
 ### Bằng GitHub Actions (khuyên dùng)
 
+Mỗi lần build trên `main`, workflow tự đăng `JVHD.ipa` lên GitHub Release
+`ipa-latest`. Link **cố định**, mở bằng trình duyệt là tải về ngay — kể cả trên
+điện thoại, không cần đăng nhập, không cần cài `gh`/`git`:
+
+```
+https://github.com/Binkyo2013/JVHD/releases/download/ipa-latest/JVHD.ipa
+```
+
+Trang release (xem phiên bản, dung lượng, commit, ngày đóng gói):
+<https://github.com/Binkyo2013/JVHD/releases/tag/ipa-latest>
+
+Build thủ công và lấy qua artifact (cần máy tính):
+
 ```bash
 gh workflow run build-ipa.yml            # hoặc push lên nhánh main
 gh run watch                             # theo dõi
 gh run download <run-id> -n JVHD-unsigned-ipa
 ```
 
-Artifact `JVHD-unsigned-ipa` chứa `JVHD.ipa`.
+Artifact `JVHD-unsigned-ipa` chứa `JVHD.ipa` (giữ 30 ngày, phải đăng nhập
+GitHub mới tải được — vì vậy nên dùng link Release ở trên).
 
 ### Bằng Xcode trên máy Mac
 
