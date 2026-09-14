@@ -8,6 +8,8 @@
  *   GET  /__native/c0?n=<name>  -> SHA-256(name + salt) hex
  *   GET  /__native/d0           -> khoá công khai thiết bị (base64)
  *   POST /__native/e0           -> chữ ký ECDSA (base64 DER)
+ *   ANY  /__native/api?u=       -> chuyển tiếp API chéo nguồn (đăng nhập),
+ *                                  GIỮ NGUYÊN method + body + Content-Type
  *   GET  /__native/env          -> thông tin môi trường (debug)
  *
  * Chỉ lắng nghe 127.0.0.1 — không bao giờ mở ra ngoài thiết bị.
@@ -426,11 +428,86 @@ final class LocalServer: NSObject {
                 NSLog("[JVHD][web] %@", text)
             }
             connection.respond(status: 204, headers: corsHeaders([:]), body: Data(), keepAlive: request.isKeepAlive)
+        case "/__native/api":
+            relayAPI(request, connection)
         case "/jvhd-media", "/jvhd-media/":
             MediaProxy.shared.handle(request, connection)
         default:
             serveStatic(request, connection)
         }
+    }
+
+    // MARK: - Kênh API (đăng nhập / xác thực)
+
+    /// Phiên mạng riêng cho lời gọi API ngắn (không dùng chung với MediaProxy
+    /// vốn cấu hình cho luồng phát `avStreaming`).
+    private lazy var apiSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.httpShouldSetCookies = false
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.timeoutIntervalForRequest = JVHDConfig.authTimeout
+        configuration.timeoutIntervalForResource = 30
+        return URLSession(configuration: configuration)
+    }()
+
+    /// Chuyển tiếp lời gọi API chéo nguồn (POST /auth/start, /auth/verify…).
+    ///
+    /// WKWebView KHÔNG cho tắt CORS (khác WebView Android và Electron với
+    /// `webSecurity: false`), nên `ios-bridge.js` đổi lời gọi chéo nguồn thành
+    /// request CÙNG NGUỒN tới đây kèm body gốc. Nhiệm vụ của hàm này là gửi lại
+    /// ĐÚNG method + body + Content-Type lên máy chủ thật rồi trả nguyên trạng
+    /// thái/phản hồi về WebView.
+    ///
+    /// Lưu ý: KHÔNG được đẩy lời gọi này sang `/jvhd-media` — proxy nội dung ép
+    /// `httpMethod = "GET"` và không đọc body, khiến máy chủ xác thực nhận GET
+    /// rỗng và trả lỗi => app báo "không kết nối được máy chủ xác thực".
+    private func relayAPI(_ request: HTTPRequest, _ connection: HTTPConnection) {
+        let keepAlive = request.isKeepAlive
+        guard let encodedTarget = request.query["u"],
+              let decodedData = JVHDCrypto.decodeBase64Loose(encodedTarget),
+              let target = String(data: decodedData, encoding: .utf8),
+              let url = URL(string: target),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            connection.respond(status: 400,
+                               headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
+                               body: Data("bad target".utf8),
+                               keepAlive: keepAlive)
+            return
+        }
+
+        var upstream = URLRequest(url: url,
+                                  cachePolicy: .reloadIgnoringLocalCacheData,
+                                  timeoutInterval: JVHDConfig.authTimeout)
+        upstream.httpMethod = request.method
+        if let contentType = request.headers["content-type"], !contentType.isEmpty {
+            upstream.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        }
+        if let accept = request.headers["accept"], !accept.isEmpty {
+            upstream.setValue(accept, forHTTPHeaderField: "Accept")
+        }
+        if !request.body.isEmpty { upstream.httpBody = request.body }
+
+        apiSession.dataTask(with: upstream) { [weak self] data, response, error in
+            guard let self = self else { return }
+            if let error = error {
+                NSLog("[JVHD][api] lỗi chuyển tiếp %@ : %@", target, error.localizedDescription)
+                connection.respond(status: 502,
+                                   headers: self.corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
+                                   body: Data("API error: \(error.localizedDescription)".utf8),
+                                   keepAlive: keepAlive)
+                return
+            }
+            let http = response as? HTTPURLResponse
+            let status = http?.statusCode ?? 200
+            let upstreamType = (http?.allHeaderFields["Content-Type"] as? String) ?? ""
+            let contentType = upstreamType.isEmpty ? "application/json; charset=utf-8" : upstreamType
+            connection.respond(status: status,
+                               headers: self.corsHeaders(["Content-Type": contentType]),
+                               body: data ?? Data(),
+                               keepAlive: keepAlive)
+        }.resume()
     }
 
     private func signChallenge(_ payload: String) -> String {

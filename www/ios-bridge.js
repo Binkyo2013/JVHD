@@ -9,8 +9,12 @@
  * này thay thế bằng:
  *   1. AndroidBridge giả lập: c0 tính bằng SHA-256 thuần JS, d0 lấy khoá công
  *      khai native (đã chèn sẵn), e0 gọi local server bằng XHR ĐỒNG BỘ.
- *   2. Mọi XHR chéo nguồn tự động đi qua proxy cục bộ /jvhd-media (giống hệt cơ
- *      chế "ISP bypass" đã có trong app.js) -> không còn lỗi CORS.
+ *   2. Mọi XHR chéo nguồn tự động đi qua máy chủ cục bộ -> không còn lỗi CORS:
+ *        · GET/HEAD  -> /jvhd-media   (proxy nội dung, bẻ lại playlist HLS)
+ *        · POST/...  -> /__native/api (chuyển tiếp ĐÚNG method + body + Content-Type)
+ *      Tách hai kênh là bắt buộc: /jvhd-media chỉ biết GET và không đọc body,
+ *      nếu lời gọi xác thực POST /auth/* rơi vào đó thì máy chủ nhận GET rỗng
+ *      và đăng nhập luôn báo "không kết nối được máy chủ xác thực".
  *   3. Khi hls.js không chạy được (iOS < 17.1 không có ManagedMediaSource),
  *      tự động chuyển luồng HLS sang AVPlayer native.
  *
@@ -210,6 +214,15 @@
         return origin + "/jvhd-media/?u=" + encodeURIComponent(b64(target)) + "&r=" + encodeURIComponent(b64(ref));
     }
 
+    // Kênh API (POST/PUT/PATCH/DELETE): KHÁC proxy nội dung ở chỗ máy chủ cục bộ
+    // chuyển tiếp ĐÚNG method + body + Content-Type. /jvhd-media chỉ biết GET và
+    // không đọc body, nên tuyệt đối không được dùng cho lời gọi xác thực.
+    function buildApiUrl(url) {
+        var origin = BASE || (window.location && window.location.origin) || "";
+        if (!origin) return String(url || "");
+        return origin + "/__native/api?u=" + encodeURIComponent(b64(String(url == null ? "" : url)));
+    }
+
     if (typeof window.AndroidBridge === "undefined") {
         window.AndroidBridge = {
             // Bọc URL nguồn qua proxy cục bộ (đồng bộ, không cần gọi native).
@@ -252,12 +265,19 @@
         try {
             responseURLDescriptor = Object.getOwnPropertyDescriptor(RealXHR.prototype, "responseURL");
         } catch (e) { responseURLDescriptor = null; }
-        function shouldProxy(url) {
+
+        // Request chéo nguồn có cần đi nhờ máy chủ cục bộ không?
+        // (WKWebView không cho tắt CORS, khác WebView Android và Electron.)
+        function needsRelay(url) {
             var target = absoluteUrl(url);
             if (!isHttp(target)) return false;
-            if (target.indexOf("/jvhd-media/") !== -1) return false; // đã là proxy
+            if (target.indexOf("/jvhd-media/") !== -1) return false; // đã là proxy nội dung
+            if (target.indexOf("/__native/") !== -1) return false;   // đã là kênh native/API
             return !sameOrigin(target);
         }
+        // Chỉ lời đọc nội dung mới đi qua proxy HLS.
+        function isMediaVerb(verb) { return verb === "GET" || verb === "HEAD"; }
+
         function PatchedXHR() {
             var xhr = new RealXHR();
             var originalUrl = null;
@@ -265,11 +285,23 @@
             var originalOpen = xhr.open;
             xhr.open = function (method, url) {
                 var args = [].slice.call(arguments);
+                var verb = String(method == null ? "GET" : method).toUpperCase();
                 originalUrl = absoluteUrl(url);
                 proxiedUrl = null;
-                if (shouldProxy(originalUrl)) {
-                    proxiedUrl = buildProxyUrl(originalUrl, "");
-                    args[1] = proxiedUrl;
+                if (needsRelay(originalUrl)) {
+                    if (isMediaVerb(verb)) {
+                        // Giữ nguyên hành vi cũ 100% cho nội dung/HLS.
+                        proxiedUrl = buildProxyUrl(originalUrl, "");
+                        args[1] = proxiedUrl;
+                    } else {
+                        // POST/PUT/... : giữ method, để nguyên body + Content-Type
+                        // do app.js set — máy chủ cục bộ sẽ chuyển tiếp y hệt.
+                        // (Trước đây nhánh này rơi vào /jvhd-media nên bị ép GET và
+                        //  mất body JSON -> đăng nhập iOS luôn báo lỗi mạng.)
+                        proxiedUrl = buildApiUrl(originalUrl);
+                        args[0] = verb;
+                        args[1] = proxiedUrl;
+                    }
                 }
                 return originalOpen.apply(xhr, args);
             };

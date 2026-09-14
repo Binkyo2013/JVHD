@@ -48,6 +48,7 @@ Double-click `JVHD.bat` (cần Node.js LTS). Cấu hình trong `jvhd.config.js`:
 node tools/tool.js hash <username>   # tính SHA-256(name + salt)
 node tools/tool.js selfcheck         # tự kiểm tra khoá/chữ ký
 node test/node_test.js               # chạy bộ kiểm thử không cần giao diện
+node test/ios_auth_test.js           # kiểm thử luồng đăng nhập của bản iOS
 ```
 
 ## Giao diện web

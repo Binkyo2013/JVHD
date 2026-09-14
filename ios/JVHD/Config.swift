@@ -33,6 +33,9 @@ enum JVHDConfig {
     static let signDigest = "sha256"
     /// challenge từ server là base64 -> phải decode trước khi SHA-256 + ký.
     static let challengeEncoding = "base64"
+    /// Timeout cho lời gọi API xác thực qua kênh `/__native/api`.
+    /// app.js tự huỷ sau 15s; để native dài hơn một chút cho JS chủ động trước.
+    static let authTimeout: TimeInterval = 20
 
     // MARK: - Proxy nội dung
 

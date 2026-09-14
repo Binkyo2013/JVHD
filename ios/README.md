@@ -24,6 +24,7 @@ viết bằng Swift** để thay thế hoàn toàn phần Node.js/Electron của
 │   ├── LocalServer (NWListener, chỉ nghe 127.0.0.1)           │
 │   │      · /                  tệp tĩnh trong www/ (bundle)   │
 │   │      · /jvhd-media/?u=&r= proxy nội dung + bẻ HLS        │
+│   │      · /__native/api?u=   chuyển tiếp API (đăng nhập)    │
 │   │      · /__native/c0|d0|e0 hàm mật mã thiết bị            │
 │   │                                                          │
 │   └── DeviceKey (Secure Enclave P-256, d0/e0)                │
@@ -37,7 +38,7 @@ viết bằng Swift** để thay thế hoàn toàn phần Node.js/Electron của
 | `src/server.js` (Node HTTP)       | `LocalServer.swift` (Network.framework)             |
 | `src/crypto-bridge.js` (node crypto) | `DeviceKey.swift` (Secure Enclave) + `Crypto.swift` |
 | `preload.js` (`contextBridge`)    | `www/ios-bridge.js` (chèn lúc phục vụ `index.html`) |
-| CORS injector của Electron        | XHR chéo nguồn tự đi qua `/jvhd-media` (xem dưới)   |
+| CORS injector của Electron        | XHR chéo nguồn tự đi qua máy chủ cục bộ (xem dưới)  |
 | Cửa sổ ẩn vượt WAF                | **Không chuyển sang iOS** (xem mục 5)               |
 
 ## 2. Những gì đã làm cho đúng chuẩn iPhone
@@ -73,9 +74,40 @@ Khoá riêng **không bao giờ** rời khỏi thiết bị và không bao giờ
 WebView.
 
 **Chống lỗi CORS**: WKWebView không cho phép tắt CORS như Electron
-(`webSecurity: false`), nên `ios-bridge.js` bọc `XMLHttpRequest`: mọi request
-chéo nguồn tự đi qua proxy cục bộ, đồng thời `responseURL` được trả lại URL gốc
-để logic origin của `app.js` hoạt động y hệt bản Windows.
+(`webSecurity: false`) hay WebView Android, nên `ios-bridge.js` bọc
+`XMLHttpRequest` và cho mọi request chéo nguồn đi nhờ máy chủ cục bộ theo
+**hai kênh tách biệt**:
+
+| Method      | Kênh               | Hành vi                                                       |
+|-------------|--------------------|---------------------------------------------------------------|
+| `GET`/`HEAD`| `/jvhd-media/?u=&r=`| Proxy nội dung: giả UA iPhone, giữ Referer, bẻ lại playlist HLS |
+| `POST`/…    | `/__native/api?u=`  | Chuyển tiếp **đúng method + body + Content-Type** lên máy chủ thật, trả nguyên trạng thái & phản hồi |
+
+Đồng thời `responseURL` được trả lại URL gốc để logic origin của `app.js` hoạt
+động y hệt bản Windows.
+
+> **Vì sao phải tách hai kênh (lỗi đăng nhập iOS đã sửa):**
+> trước đây *mọi* request chéo nguồn — kể cả `POST /auth/start` — đều bị đẩy
+> sang `/jvhd-media`. Proxy nội dung ép `httpMethod = "GET"`
+> (`MediaProxy.swift`) và không hề đọc body, nên máy chủ xác thực nhận một
+> `GET /auth/start` **rỗng** thay vì `POST` kèm JSON `{h: <hash>}`. Nó trả lỗi
+> → `app.js` rơi vào `jvhdUserAuthNetworkError()` và hiện đúng thông báo
+> *“Không kết nối được máy chủ xác thực, thử lại”*. Bản Android không bị vì
+> WebView Android chạy không bắt buộc CORS nên `app.js` gọi thẳng máy chủ.
+> `/jvhd-media` vẫn giữ nguyên 100% hành vi cũ cho nội dung/HLS.
+
+### Kiểm thử
+
+```bash
+node test/node_test.js       # bản Windows: crypto + local server + proxy HLS
+node test/ios_auth_test.js   # bản iOS: nạp THẬT www/ios-bridge.js rồi chạy
+                             # đúng luồng POST /auth/start → e0 → /auth/verify
+```
+
+`ios_auth_test.js` dựng lại môi trường WKWebView (stub `XMLHttpRequest`) cùng
+bảng định tuyến của `LocalServer.swift`, rồi soi chính xác method/body/
+Content-Type mà máy chủ xác thực nhận được — nên nó bắt lại được đúng lỗi kể
+trên và khoá không cho tái diễn.
 
 ## 4. Build
 
