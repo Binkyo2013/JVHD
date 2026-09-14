@@ -11,10 +11,18 @@ song** từ cùng một bộ mã giao diện web:
 
 ## Bản iOS
 
+**Tải file `.ipa` (bấm là tải, dùng được trên điện thoại, không cần đăng nhập):**
+
+> <https://github.com/Binkyo2013/JVHD/releases/download/ipa-latest/JVHD.ipa>
+
+Trang release: <https://github.com/Binkyo2013/JVHD/releases/tag/ipa-latest> — link
+này **cố định**, GitHub Actions tự ghi đè bằng bản build mới nhất mỗi lần có
+thay đổi trong `ios/`, `www/` hoặc workflow được đưa lên `main`.
+
 ```bash
 python3 tools/gen_xcodeproj.py   # sinh lại ios/JVHD.xcodeproj (nếu đổi danh sách file)
-gh workflow run build-ipa.yml    # build .ipa trên GitHub Actions
-gh run download <run-id> -n JVHD-unsigned-ipa
+gh workflow run build-ipa.yml    # build .ipa thủ công trên GitHub Actions
+gh run download <run-id> -n JVHD-unsigned-ipa   # (cách cũ, cần máy tính + gh)
 ```
 
 Chi tiết kiến trúc, cách ký/cài lên iPhone và các giới hạn:
