@@ -1,0 +1,51 @@
+### GET /health
+{"ok":true,"bindingReady":true,"bindings":17,"bindingSource":"jsonbin","bindingLoadedAt":"2026-09-15T00:42:24.356Z","bindingSavedAt":null,"bindingError":null}
+
+### POST /auth/start
+
+================ /auth/start  h=37b5d924f34f64ed7e88033b8c31db39b314ddca0ec624ea94d5b8056467ca5b ================
+HTTP 200
+content-type: application/json; charset=utf-8
+body(raw): {"status":"challenge","challenge":"Eqa8elAwNrjCZ8dAR5UTvU0fbJ9q7gFaiSXckN99CLc="}
+keys: ["status","challenge"]
+status: "challenge"
+  trường 'status' -> {"length":9,"base64Strict":false,"base64Loose":true,"base64Url":true,"hex":false,"printableAscii":true,"decodedBase64Bytes":6,"roundTripsBase64":false}
+  trường 'challenge' -> {"length":44,"base64Strict":true,"base64Loose":true,"base64Url":true,"hex":false,"printableAscii":true,"decodedBase64Bytes":32,"roundTripsBase64":true}
+
+================ /auth/start  h=0000000000000000000000000000000000000000000000000000000000000000 ================
+HTTP 200
+content-type: application/json; charset=utf-8
+body(raw): {"status":"unknown"}
+keys: ["status"]
+status: "unknown"
+
+================ /health ================
+{"ok":true,"bindingReady":true,"bindings":17,"bindingSource":"jsonbin","bindingLoadedAt":"2026-09-15T00:42:24.356Z","bindingSavedAt":null,"bindingError":null}
+
+### swiftc
+biên dịch OK
+
+### native harness (Swift thật trong IPA)
+SWIFT_RESULT {"c0_Admin2":"37b5d924f34f64ed7e88033b8c31db39b314ddca0ec624ea94d5b8056467ca5b","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=","challengeEncoding":"base64","concat":"suffix","d0":"BE9tkCOTk6GIOG3M0YPr4jproj96doGYA9ffLPgFp0zMlVOwpsMb8l7m\/+3Kg4ba3NRG154bzPw3FWcb197yh+M=","d0_bytes":65,"d0_firstByte":4,"leniency":{"base64 chuẩn":{"nodeDecodedBytes":11,"sample":"aGVsbG8td29ybGQ=","swiftDecodedBytes":11,"swiftSigEmpty":false},"base64 thiếu đệm '='":{"nodeDecodedBytes":11,"sample":"aGVsbG8td29ybGQ","swiftDecodedBytes":11,"swiftSigEmpty":false},"base64url":{"nodeDecodedBytes":11,"sample":"aGVsbG8td29ybGQ_","swiftDecodedBytes":12,"swiftSigEmpty":false},"chuỗi ngẫu nhiên thường":{"nodeDecodedBytes":8,"sample":"n8Kd2-sX91_qW","swiftDecodedBytes":-1,"swiftSigEmpty":true},"chuỗi rỗng":{"nodeDecodedBytes":0,"sample":"","swiftDecodedBytes":-1,"swiftSigEmpty":true},"hex 64 ký tự":{"nodeDecodedBytes":48,"sample":"abababababababababababababababababababababababababababababababab","swiftDecodedBytes":48,"swiftSigEmpty":false}},"pubKeyFormat":"raw-uncompressed-b64","salt":"4f4e804da5c307dd7d88d2b58e1a44c6b312c1430ff4d29d","sig":"MEQCIEMPeWcMiQyuGK4xgjnz49+YidDkbMETkYoztES\/MoNFAiAn8j9KNC0QlX+jKoj8ekPGkLKbz9xHR1u7c8Us11xLww==","sig_bytes":70,"sig_isDER":true,"sigFormat":"der-b64","swiftVerify":true}
+
+### Node verify chữ ký Swift (chuẩn Android)
+
+[iOS native] đối chiếu d0()/e0() của Swift với crypto Node (chuẩn Android)
+  PASS  d0() là 65 byte (0x04||X||Y) — khớp pubKeyFormat raw-uncompressed-b64
+  PASS  byte đầu của d0() là 0x04 (điểm không nén)
+  PASS  Node đọc được khoá công khai từ d0() (SPKI P-256)
+  PASS  e0() trả chữ ký khác rỗng
+  PASS  chữ ký ở dạng DER (khớp sigFormat der-b64)
+  PASS  Node VERIFY được chữ ký Swift trên challenge đã base64-decode  <-- đúng công thức e0() của Android
+  PASS  Crypto.swift c0('Admin2') khớp HASH trong jsonbin
+
+  Bảng 'dễ tính' khi giải mã challenge (Swift vs Node Buffer.from base64):
+   - base64 chuẩn                 node= 11B  swift= 11B  swiftSigEmpty=không
+   - base64 thiếu đệm '='         node= 11B  swift= 11B  swiftSigEmpty=không
+   - base64url                    node= 11B  swift= 12B  swiftSigEmpty=không
+   - chuỗi ngẫu nhiên thường      node=  8B  swift= -1B  swiftSigEmpty=CÓ   <<< KHÁC BIỆT: iOS hỏng, Android vẫn chạy
+   - chuỗi rỗng                   node=  0B  swift= -1B  swiftSigEmpty=CÓ
+   - hex 64 ký tự                 node= 48B  swift= 48B  swiftSigEmpty=không
+
+  PASS: 7   FAIL: 1
+
