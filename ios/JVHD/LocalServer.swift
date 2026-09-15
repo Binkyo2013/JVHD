@@ -8,7 +8,6 @@
  *   GET  /__native/c0?n=<name>  -> SHA-256(name + salt) hex
  *   GET  /__native/d0           -> khoá công khai thiết bị (base64)
  *   POST /__native/e0           -> chữ ký ECDSA (base64 DER)
- *   GET  /__native/diag         -> chẩn đoán khoá thiết bị / định dạng chữ ký
  *   ANY  /__native/api?u=       -> chuyển tiếp API chéo nguồn (đăng nhập),
  *                                  GIỮ NGUYÊN method + body + Content-Type
  *   GET  /__native/env          -> thông tin môi trường (debug)
@@ -404,40 +403,27 @@ final class LocalServer: NSObject {
                                body: Data(digest.utf8),
                                keepAlive: request.isKeepAlive)
         case "/__native/d0":
-            // Chuỗi trả về là khoá công khai (kênh thành công) hoặc lý do bắt
-            // đầu bằng "ERR:" (kênh lỗi) — ios-bridge.js đọc cả hai để hiển thị
-            // đúng bước hỏng thay vì chỉ báo "thiết bị không hỗ trợ".
             let pub = DeviceKey.shared.publicKeyBase64()
             if pub.isEmpty {
-                connection.respond(status: 503,
-                                   headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
-                                   body: Data(errorText().utf8),
-                                   keepAlive: request.isKeepAlive)
-            } else {
-                connection.respond(status: 200,
-                                   headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
-                                   body: Data(pub.utf8),
-                                   keepAlive: request.isKeepAlive)
+                NSLog("[JVHD][native] /__native/d0 RỖNG — chẩn đoán khoá: %@",
+                      String(describing: DeviceKey.shared.diagnostics))
             }
+            connection.respond(status: pub.isEmpty ? 500 : 200,
+                               headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
+                               // Khi hỏng, thân trả về là "ERR: <lý do>" để câu lỗi
+                               // trên màn hình nói được tầng nào đã chết.
+                               body: pub.isEmpty ? keyFailureBody() : Data(pub.utf8),
+                               keepAlive: request.isKeepAlive)
         case "/__native/e0":
             let payload = request.body.isEmpty ? (request.query["d"] ?? "") : (String(data: request.body, encoding: .utf8) ?? "")
             let signature = signChallenge(payload)
             if signature.isEmpty {
-                connection.respond(status: 503,
-                                   headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
-                                   body: Data(errorText().utf8),
-                                   keepAlive: request.isKeepAlive)
-            } else {
-                connection.respond(status: 200,
-                                   headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
-                                   body: Data(signature.utf8),
-                                   keepAlive: request.isKeepAlive)
+                NSLog("[JVHD][native] /__native/e0 RỖNG — chẩn đoán khoá: %@",
+                      String(describing: DeviceKey.shared.diagnostics))
             }
-        case "/__native/diag":
-            let diag = diagnosticJSON()
-            connection.respond(status: 200,
-                               headers: corsHeaders(["Content-Type": "application/json; charset=utf-8"]),
-                               body: Data(diag.utf8),
+            connection.respond(status: signature.isEmpty ? 500 : 200,
+                               headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
+                               body: signature.isEmpty ? keyFailureBody() : Data(signature.utf8),
                                keepAlive: request.isKeepAlive)
         case "/__native/env":
             let env = environmentJSON()
@@ -532,57 +518,51 @@ final class LocalServer: NSObject {
         }.resume()
     }
 
-    /// Chuyển challenge/nonce thành đúng từng byte mà bản Android/Windows ký.
-    ///
-    /// Điểm số 3 của bản sửa lỗi: TRƯỚC ĐÂY hàm này dùng `decodeBase64Loose()`
-    /// (trả nil khi chuỗi rỗng hoặc có ký tự ngoài bảng) rồi `guard ... else
-    /// return ""`, nghĩa là mọi lệch nhỏ về định dạng biến "ký không được"
-    /// thành "thiết bị không hỗ trợ xác thực" — trong khi Node
-    /// `Buffer.from(text,'base64')` luôn bỏ qua ký tự lạ và vẫn ký cả dữ liệu
-    /// rỗng. Giờ dùng `decodeBase64NodeLike()`: iOS ký ĐÚNG như Android, và
-    /// chỉ còn báo lỗi khi thực sự không lấy được khoá.
+    /// "ERR: <tóm tắt chẩn đoán khoá>" — chỉ dùng cho đáp ứng lỗi của
+    /// `/__native/d0` và `/__native/e0`. Trước đây hai kênh này trả body rỗng,
+    /// lý do chỉ có trong NSLog, nên người dùng iPhone chỉ thấy đúng câu
+    /// "Thiết bị không hỗ trợ xác thực" mà không ai biết hỏng ở Secure Enclave,
+    /// Keychain hay tệp khoá. `ios-bridge.js` bóc chuỗi này đưa vào câu lỗi.
+    private func keyFailureBody() -> Data {
+        let info = DeviceKey.shared.diagnostics
+        var parts: [String] = []
+        if let value = info["activeBackend"] as? String { parts.append("backend=" + value) }
+        if let value = info["loadedFrom"] as? String { parts.append("lanGanNhat=" + value) }
+        if let value = info["loadKeychainStatus"] as? Int { parts.append("keychain=OSStatus\(value)") }
+        if let value = info["publicKeyError"] as? String { parts.append("d0=" + value) }
+        if let value = info["signError"] as? String { parts.append("e0=" + value) }
+        if parts.isEmpty { parts.append("không rõ (xem /__native/env)") }
+        return Data(("ERR: " + parts.joined(separator: " · ")).utf8)
+    }
+
     private func signChallenge(_ payload: String) -> String {
-        let encoding = JVHDConfig.challengeEncoding.lowercased()
-        let message: Data
-        if encoding == "base64" {
-            message = JVHDCrypto.decodeBase64NodeLike(payload)
-        } else if encoding == "hex" {
-            message = Data(hexString: payload) ?? Data(payload.utf8)
+        var data: Data
+        if JVHDConfig.challengeEncoding == "base64" {
+            // BẮT BUỘC dùng bộ giải mã tương thích Node: `Buffer.from(x,'base64')`
+            // không bao giờ lỗi, nên `e0()` của Android/Windows luôn có chữ ký.
+            // `Data(base64Encoded:)` trả nil với chuỗi rỗng/lạ -> e0() rỗng ->
+            // app.js báo "Thiết bị không hỗ trợ xác thực" và chặn đăng nhập.
+            data = JVHDCrypto.decodeBase64NodeCompatible(payload)
+        } else if JVHDConfig.challengeEncoding == "hex" {
+            data = Data(hexString: payload) ?? Data()
         } else {
-            message = Data(payload.utf8)
+            data = Data(payload.utf8)
         }
-        return DeviceKey.shared.signatureBase64(message: message)
-    }
-
-    /// Lý do kỹ thuật gần nhất, mở đầu bằng "ERR:" để phía JS nhận diện.
-    private func errorText() -> String {
-        let reason = DeviceKey.shared.lastError
-        return reason.isEmpty ? "ERR: không rõ lý do" : "ERR: " + reason
-    }
-
-    /// JSON chẩn đoán cho `/__native/diag` (mở bằng Safari trong app hoặc
-    /// `curl http://127.0.0.1:<cổng>/__native/diag` khi dev).
-    private func diagnosticJSON() -> String {
-        var info = DeviceKey.shared.statusDictionary()
-        info["authServer"] = JVHDConfig.authServer
-        info["base"] = baseURLString
-        info["system"] = UIDevice.current.systemVersion
-        info["device"] = UIDevice.current.model
-        guard let data = try? JSONSerialization.data(withJSONObject: info, options: [.prettyPrinted]),
-              let text = String(data: data, encoding: .utf8) else { return "{}" }
-        return text
+        return DeviceKey.shared.signBase64(message: data)
     }
 
     private func environmentJSON() -> String {
         let dict: [String: Any] = [
             "base": baseURLString,
             "pubkey": DeviceKey.shared.publicKeyBase64(),
-            "keyBackend": DeviceKey.shared.backend.rawValue,
             "salt": JVHDConfig.salt,
             "concat": JVHDConfig.concat,
             "authServer": JVHDConfig.authServer,
             "device": UIDevice.current.model,
-            "system": UIDevice.current.systemVersion
+            "system": UIDevice.current.systemVersion,
+            // Chẩn đoán khoá thiết bị: cho biết d0()/e0() đang dùng tầng nào và
+            // tầng nào đã thất bại (Secure Enclave / Keychain / CryptoKit).
+            "deviceKey": DeviceKey.shared.diagnostics
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]),
               let text = String(data: data, encoding: .utf8) else { return "{}" }

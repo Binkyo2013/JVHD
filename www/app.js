@@ -8933,6 +8933,23 @@
             } else {
                 detail = "ios-bridge.js chua nap";
             }
+            // Nếu cầu nối có đường đọc chẩn đoán sâu (/__native/env), nối thêm tầng
+            // khoá đang hoạt động + lỗi ký — đủ để biết hỏng ở Secure Enclave,
+            // Keychain hay tệp mà không cần cắm iPhone vào máy Mac.
+            try {
+                if (typeof window.__jvhdNativeDiagnostics === "function") {
+                    var diag = window.__jvhdNativeDiagnostics() || {};
+                    // /__native/env trả chẩn đoán khoá trong mục `deviceKey`
+                    // (activeBackend / loadKeychainStatus / publicKeyError / signError).
+                    var dk = (diag.env && diag.env.deviceKey) || {};
+                    var extra = [];
+                    if (dk.activeBackend) extra.push("khoá=" + dk.activeBackend);
+                    if (typeof dk.loadKeychainStatus !== "undefined") extra.push("keychain=" + dk.loadKeychainStatus);
+                    if (dk.publicKeyError) extra.push("d0=" + dk.publicKeyError);
+                    if (dk.signError) extra.push("e0=" + dk.signError);
+                    if (extra.length) detail += (detail ? " · " : "") + extra.join(" · ");
+                }
+            } catch (deepError) {}
             return detail ? " — iOS: " + detail : "";
         } catch (diagError) { return ""; }
     }

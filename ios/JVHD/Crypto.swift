@@ -3,10 +3,10 @@
  * c0(name) = SHA-256( name.trim().lowercased() + salt ) — khớp 100% bản
  * Node.js (`src/crypto-bridge.js`) và libbtcore.so bản gốc.
  *
- * Ba hàm định dạng ở cuối tệp là phần BẢN iOS từng thiếu/sai so với Android:
- *   · decodeBase64NodeLike() — mô phỏng đúng `Buffer.from(text,'base64')` mà
- *     bản Windows/Android dùng cho challenge (KHÔNG trả "hỏng" khi chuỗi rỗng
- *     hoặc có ký tự lạ; chuỗi rỗng vẫn ký được như Node).
+ * Ba hàm định dạng dưới đây là chỗ BẢN iOS từng lệch hợp đồng Android/server:
+ *   · decodeBase64NodeCompatible() — mô phỏng đúng `Buffer.from(text,'base64')`
+ *     mà bản Windows/Android dùng cho challenge: KHÔNG "hỏng" khi chuỗi rỗng hoặc
+ *     có ký tự lạ, chuỗi rỗng vẫn ký được như Node. (Thêm ở PR trước.)
  *   · derEncodeRS()          — đóng gói chữ ký ANSI X9.62 (r||s do
  *     `SecKeyCreateSignature` sinh ra) thành ASN.1 DER như `sigFormat:"der-b64"`.
  *   · derDecodeRS()          — chiều ngược lại, dùng cho tự kiểm tra round-trip.
@@ -37,6 +37,9 @@ enum JVHDCrypto {
 
     /// Giải mã base64 "dễ tính" giống Buffer.from(x, 'base64') của Node:
     /// chấp nhận cả biến thể URL-safe và thiếu đệm '='.
+    ///
+    /// CHỈ dùng cho những giá trị mà app tự sinh ra (tham số `u=` của proxy),
+    /// nơi trả về `nil` khi dữ liệu sai là hành vi mong muốn.
     static func decodeBase64Loose(_ text: String) -> Data? {
         var cleaned = text
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -50,55 +53,65 @@ enum JVHDCrypto {
         return data
     }
 
-    static func encodeBase64(_ text: String) -> String {
-        return Data(text.utf8).base64EncodedString()
-    }
+    // MARK: - Base64 tương thích TUYỆT ĐỐI với Node
 
-    // MARK: - Base64 theo đúng semantics của Node
-
-    /// Bảng 64 ký tự base64 chuẩn; `-`/`_` được chấp nhận như bản Node.
-    private static let base64Table: [Int] = {
-        let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-        var table = [Int](repeating: -1, count: 256)
-        for (index, character) in alphabet.enumerated() {
-            if let ascii = character.asciiValue { table[Int(ascii)] = index }
-        }
-        table[Int(UInt8(ascii: "-"))] = 62
-        table[Int(UInt8(ascii: "_"))] = 63
+    /// Bảng chữ cái base64 mà `Buffer.from(x, 'base64')` của Node chấp nhận,
+    /// kèm cả biến thể URL-safe ('-' -> 62, '_' -> 63).
+    private static let base64Values: [UInt8: UInt8] = {
+        var table: [UInt8: UInt8] = [:]
+        let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".utf8)
+        for (index, character) in alphabet.enumerated() { table[character] = UInt8(index) }
+        table[UInt8(ascii: "-")] = 62
+        table[UInt8(ascii: "_")] = 63
         return table
     }()
 
-    /// Giống `Buffer.from(text, "base64")` của Node: bỏ ký tự ngoài bảng,
-    /// gặp `=` thì dừng, 6 bit gom thành byte, byte thừa bị bỏ.
-    /// Khác `decodeBase64Loose()`: KHÔNG bao giờ trả nil — chuỗi rỗng cho ra
-    /// dữ liệu rỗng và vẫn được ký (bản Node/Android cũng vậy). Đây là điểm
-    /// khiến iOS báo "Thiết bị không hỗ trợ xác thực" khi challenge/nonce có
-    /// định dạng hơi khác một chút.
-    static func decodeBase64NodeLike(_ text: String) -> Data {
-        var output: [UInt8] = []
-        var bits = 0
-        var collected = 0
+    /// Giải mã base64 THEO ĐÚNG NGỮ NGHĨA `Buffer.from(text, 'base64')` của
+    /// Node.js — hàm mà bản Windows/Android dùng trong
+    /// `src/crypto-bridge.js:e0()`.
+    ///
+    /// Ngữ nghĩa của Node (đã kiểm chứng bằng `node -e`):
+    ///   · bỏ qua MỌI ký tự không thuộc bảng chữ cái base64 (kể cả khoảng trắng);
+    ///   · chấp nhận cả '-'/'_' (URL-safe);
+    ///   · dừng ngay tại dấu '=' đầu tiên (phần đệm);
+    ///   · nhóm cuối chỉ có 1 ký tự thì bị bỏ;
+    ///   · KHÔNG BAO GIỜ báo lỗi — chuỗi rỗng cho ra `Data()` rỗng.
+    ///
+    /// Vì sao bắt buộc phải có hàm này:
+    /// `Data(base64Encoded:)` của Foundation THẤT BẠI (trả nil) với chuỗi rỗng
+    /// hoặc chuỗi có ký tự lạ, trong khi Node vẫn trả về một vùng nhớ (có thể
+    /// rỗng) và `crypto.sign` vẫn ký được. Hệ quả là `e0()` của iOS trả về ""
+    /// -> `app.js` coi là "thiết bị không hỗ trợ xác thực" và chặn đăng nhập,
+    /// còn Android vẫn ký và đăng nhập bình thường.
+    static func decodeBase64NodeCompatible(_ text: String) -> Data {
+        var sextets = [UInt8]()
+        sextets.reserveCapacity(text.utf8.count)
         for byte in text.utf8 {
-            if byte == 0x3d { break } // '=': kết thúc như Node
-            let value = base64Table[Int(byte)]
-            guard value >= 0 else { continue }
-            bits = (bits << 6) | value
-            collected += 6
-            if collected == 24 {
-                output.append(UInt8((bits >> 16) & 0xff))
-                output.append(UInt8((bits >> 8) & 0xff))
-                output.append(UInt8(bits & 0xff))
-                bits = 0
-                collected = 0
+            // Dừng tại dấu '=' đầu tiên, giống hệt Node.
+            if byte == UInt8(ascii: "=") { break }
+            if let value = base64Values[byte] { sextets.append(value) }
+        }
+        // Node sinh ra đúng floor(số_sextet * 6 / 8) byte:
+        //   1 sextet -> 0 byte · 2 -> 1 byte · 3 -> 2 byte · 4 -> 3 byte.
+        let byteCount = (sextets.count * 6) / 8
+        var out = Data(count: byteCount)
+        var bitBuffer = 0
+        var bitsInBuffer = 0
+        var written = 0
+        for sextet in sextets {
+            bitBuffer = (bitBuffer << 6) | Int(sextet)
+            bitsInBuffer += 6
+            while bitsInBuffer >= 8 && written < byteCount {
+                bitsInBuffer -= 8
+                out[written] = UInt8((bitBuffer >> bitsInBuffer) & 0xff)
+                written += 1
             }
         }
-        if collected == 12 {
-            output.append(UInt8((bits >> 4) & 0xff))
-        } else if collected == 18 {
-            output.append(UInt8((bits >> 10) & 0xff))
-            output.append(UInt8((bits >> 2) & 0xff))
-        }
-        return Data(output)
+        return out
+    }
+
+    static func encodeBase64(_ text: String) -> String {
+        return Data(text.utf8).base64EncodedString()
     }
 
     // MARK: - Định dạng chữ ký ECDSA (X9.62 <-> DER)
@@ -123,8 +136,8 @@ enum JVHDCrypto {
     }
 
     /// ANSI X9.62 (`r||s`, mỗi thành phần 32 byte với P-256) -> ASN.1 DER.
-    /// Đây là bước BẢN iOS còn thiếu: `SecKeyCreateSignature` chỉ xuất X9.62,
-    /// còn máy chủ và bản Android/Windows dùng DER.
+    /// Đây là bước mà BẢN iOS còn thiếu trên máy thật: `SecKeyCreateSignature`
+    /// chỉ xuất X9.62, còn máy chủ và bản Android/Windows dùng DER.
     static func derEncodeRS(_ raw: Data) -> Data? {
         let bytes = [UInt8](raw)
         guard bytes.count >= 8, bytes.count % 2 == 0 else { return nil }

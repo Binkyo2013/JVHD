@@ -119,7 +119,7 @@ for (let n = 0; n < edge.length; n++) {
 }
 
 // 3) Chuỗi test cho decode base64 kiểu Node `Buffer.from(text,'base64')`
-//    (bản Swift `decodeBase64NodeLike` phải cho ra cùng byte).
+//    (bản Swift `decodeBase64NodeCompatible` phải cho ra cùng byte).
 const b64Inputs = [
   "aGVsbG8=", "aGVsbG8", "///8", "SGVsbG8sIHdvcmxkIQ==", "", "   ",
   "###not base64###", "a-b_c", "AA", "AAA", "AAAA", "/////",

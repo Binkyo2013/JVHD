@@ -4,7 +4,8 @@
  * Chạy trong CI (workflow build-ipa.yml, bước "Tự kiểm thuật toán iOS").
  *
  * Mã được kiểm: `JVHDCrypto.derEncodeRS()`, `derDecodeRS()`,
- * `decodeBase64NodeLike()` — tức hai phần BẢN iOS từng thiếu so với Android:
+ * `decodeBase64NodeCompatible()` — tức phần định dạng mà BẢN iOS cần để
+ * khớp hợp đồng Android/server:
  *   · đóng gói chữ ký X9.62 (r||s) thành ASN.1 DER mà máy chủ verifySig() chấp nhận
  *   · giải mã base64 theo đúng luật Buffer.from(text,'base64') của Node
  *
@@ -93,7 +94,7 @@ if let cases = root["base64"] as? [[String: Any]] {
         let expectedHex = item["out"] as? String ?? ""
         // Node trả về buffer rỗng cho nhiều chuỗi (hex ""), đó là giá trị hợp lệ.
         let expected: Data = expectedHex.isEmpty ? Data() : (hexToData(expectedHex) ?? Data())
-        let decoded = JVHDCrypto.decodeBase64NodeLike(input)
+        let decoded = JVHDCrypto.decodeBase64NodeCompatible(input)
         if decoded != expected {
             base64Problems += 1
             print("  LECH  \(name): input=\(String(reflecting: input))")

@@ -93,25 +93,51 @@ jobs:
           test -d www || { echo "::error::Thiếu thư mục www"; exit 1; }
           /usr/libexec/PlistBuddy -c 'Print' ios/JVHD/Info.plist | head -20
 
-      # ------------------------------------------------- tự kiểm (không cần máy) --
-      # Chạy TRƯỚC khi build để lỗi logic hiện ra sau ~10 giây thay vì sau 2 phút
-      # biên dịch, và để lỗi được đăng lên PR nhờ bước "Đăng lỗi build lên PR".
-      - name: "Tự kiểm Node: cầu nối iOS, luồng xác thực, không đổi JSONBin"
+      # ------------------------------------------------------------ kiểm thử --
+      # Chặn ngay từ vòng build nếu mật mã iOS lệch khỏi chuẩn Android/Windows.
+      # Đây chính là lớp đã bắt được lỗi "Thiết bị không hỗ trợ xác thực":
+      # e0() của iOS trả chuỗi rỗng với payload mà Node vẫn ký được.
+      - name: Setup Node (kiểm thử)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Kiểm thử Node (bản Windows + luồng đăng nhập iOS)
         run: |
-          node --version
+          set -eo pipefail
           node test/node_test.js
           node test/ios_auth_test.js
+          # Luồng end-to-end bind/verify kiểm bằng QUY TẮC THẬT của máy chủ xác thực
+          # (pubFromRaw/verifySig/newNonce) — bắt được cả lỗi định dạng chữ ký lẫn
+          # lỗi ghi đè dữ liệu JSONBin.
           node test/ios_auth_flow_test.js
 
-      # Thuật toán DER/base64 của Swift được kiểm bằng fixture sinh từ Node/OpenSSL.
-      # Đây là phần dễ sai nhất và KHÔNG thể kiểm bằng JS.
-      - name: "Tự kiểm thuật toán iOS (X9.62 -> DER, base64 kiểu Node) bằng swiftc"
+      # Thuật toán ĐÓNG GÓI chữ ký (X9.62 -> ASN.1 DER) và giải mã base64 kiểu Node
+      # là thứ không thể kiểm bằng JS và cũng không thể kiểm bằng probe trên runner
+      # macOS (ở đó Secure Enclave không khả dụng nên DeviceKey rơi xuống nhánh
+      # CryptoKit). Vì vậy kiểm trực tiếp hàm Swift bằng fixture do Node/OpenSSL sinh.
+      - name: "Kiểm thuật toán iOS: derEncodeRS / base64 theo fixture OpenSSL"
         run: |
-          mkdir -p build
-          xcrun --sdk macosx swiftc -O \
-            -o build/ios-crypto-check \
-            ios/JVHD/Crypto.swift tools/ios_crypto_check/main.swift
-          ./build/ios-crypto-check test/der_fixtures.json
+          set -eo pipefail
+          swiftc -O \
+            ios/JVHD/Config.swift \
+            ios/JVHD/Crypto.swift \
+            tools/ios_crypto_check/main.swift \
+            -o "$RUNNER_TEMP/ios_crypto_check"
+          "$RUNNER_TEMP/ios_crypto_check" test/der_fixtures.json
+
+      - name: Đối chiếu mật mã iOS với chuẩn Android (d0/e0/c0)
+        run: |
+          set -eo pipefail
+          swiftc -O \
+            ios/JVHD/Config.swift \
+            ios/JVHD/Crypto.swift \
+            ios/JVHD/DeviceKey.swift \
+            tools/native_crypto_main.swift \
+            -o "$RUNNER_TEMP/native_crypto_probe"
+          "$RUNNER_TEMP/native_crypto_probe" | tee "$RUNNER_TEMP/native_out.txt"
+          JSON=$(grep '^SWIFT_RESULT ' "$RUNNER_TEMP/native_out.txt" | head -1 | sed 's/^SWIFT_RESULT //')
+          node tools/verify_swift_sig.js "$JSON"
 
       # ---------------------------------------------------------------- ký --
       - name: Nhập chứng thư & provisioning profile

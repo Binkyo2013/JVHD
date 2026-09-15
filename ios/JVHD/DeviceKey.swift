@@ -1,162 +1,176 @@
 /*
  * DeviceKey.swift
- * Khoá thiết bị ECDSA P-256 — tương đương `BtK.pk()/BtK.sg()` của bản Android
- * (libbtcore.so + Android Keystore) và `src/crypto-bridge.js` của bản Windows.
+ * Khoá thiết bị ECDSA P-256:
+ *   - Tạo trong Secure Enclave (nếu máy hỗ trợ), dự phòng: Keychain thường,
+ *     dự phòng cuối: khoá CryptoKit lưu trong Application Support (đúng mô
+ *     hình `ensureDeviceKey()` của bản Node/Windows — ghi khoá PEM ra đĩa).
+ *   - Khoá riêng KHÔNG BAO GIỜ được đưa vào WebView.
+ *   - d0() = base64(0x04 || X || Y)   ·   e0(data) = ECDSA(SHA-256(data)) DER/base64
  *
- *   d0() = base64(0x04 || X || Y)          (pubKeyFormat = "raw-uncompressed-b64")
- *   e0() = base64(ECDSA/SHA-256) theo DER  (sigFormat   = "der-b64")
+ * Tương đương `src/crypto-bridge.js` + libbtcore.so của bản Android/Windows.
  *
- * Ba nguồn khoá, thử theo thứ tự (lưu ý điểm số 3):
- *   1. Secure Enclave  — an toàn nhất, chỉ máy thật.
- *   2. Keychain thường — máy giả lập / máy không có Secure Enclave.
- *   3. Tệp trong Application Support (khoá P-256 của CryptoKit).
- *
- * Số 3 là bản sao đúng cách bản Windows làm (`ensureDeviceKey()` ghi PEM vào
- * tệp): TRƯỚC BẢN SỬA NÀY, iOS chỉ có 1 và 2. Khi Keychain không dùng được
- * (IPA không ký / ký lại bằng chứng thư cá nhân không cấp `keychain-access-groups`,
- * app bị cài đè làm đổi access group, ...) `publicKeyBase64()` trả chuỗi rỗng,
- * `LocalServer` trả 500, `ios-bridge.js` trả "" cho `d0()/e0()`, và `app.js`
- * fail-closed in ra đúng câu "Thiết bị không hỗ trợ xác thực, không thể tiếp tục"
- * — thiết bị mới không bao giờ bind được, dù tài khoản hợp lệ.
- *
- * Khóa riêng KHÔNG BAO GIỜ rời khỏi thiết bị: chỉ chữ ký và khoá công khai được
- * gửi đi. Tệp khoá được ghi với Data Protection `completeUnlessOpen` và chỉ
- * đọc được bởi đúng app này.
+ * HỢP ĐỒNG PHẢI GIỐNG HỆT BẢN ANDROID/NODE:
+ *   `ensureDeviceKey()` của Node LUÔN trả về một khoá (tạo mới + ghi file nếu
+ *   chưa có) và `e0()` LUÔN trả về chữ ký. iOS phải y như vậy: d0()/e0()
+ *   không bao giờ được trả về chuỗi rỗng, vì `app.js` diễn giải chuỗi rỗng là
+ *   "Thiết bị không hỗ trợ xác thực, không thể tiếp tục" và chặn đăng nhập.
  */
 
+import CryptoKit
 import Foundation
 import Security
-import CryptoKit
 
 final class DeviceKey {
 
     static let shared = DeviceKey()
 
-    // MARK: Trạng thái (phục vụ chẩn đoán — xem /__native/diag)
-
-    enum Backend: String {
-        case secureEnclave = "secure-enclave"
-        case keychain = "keychain"
-        case file = "file"
-        case none = "none"
-    }
-
-    private let lock = NSLock()
     private let applicationTag = "vn.jvhd.ios.devicekey".data(using: .utf8)!
-    private let fileName = "jvhd-device-key.raw"
+    private let lock = NSLock()
+    private var cached: Backend?
 
-    /// Khoá lấy từ Keychain (Secure Enclave hoặc Keychain thường).
-    private var cachedKey: SecKey?
-    /// Khoá dự phòng lưu trong tệp (CryptoKit), chỉ dùng khi Keychain hỏng.
-    private var cachedFileKey: P256.Signing.PrivateKey?
-    private var didTryFileKey = false
+    /// Chẩn đoán lần khởi tạo khoá gần nhất (đưa lên `/__native/env` để không
+    /// bao giờ phải đoán mò khi đăng nhập lỗi nữa).
+    private(set) var diagnostics: [String: Any] = [:]
 
-    private(set) var backend: Backend = .none
-    private(set) var lastError: String = ""
+    enum Backend {
+        case secureEnclave(SecKey)
+        case keychain(SecKey)
+        case cryptoKit(P256.Signing.PrivateKey)
+
+        var name: String {
+            switch self {
+            case .secureEnclave: return "secure-enclave"
+            case .keychain: return "keychain"
+            case .cryptoKit: return "cryptokit-file"
+            }
+        }
+    }
 
     private init() {}
 
-    // MARK: - Đường dẫn tệp khoá dự phòng
+    // MARK: - Khoá riêng
 
-    private var keyFileURL: URL? {
-        guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return nil
+    /// Trả về khoá riêng P-256 (tạo/lần đầu nếu chưa có). Không bao giờ nil
+    /// trừ khi cả ba tầng dự phòng đều hỏng.
+    func privateKey() -> SecKey? {
+        switch backend() {
+        case .secureEnclave(let key), .keychain(let key): return key
+        case .cryptoKit, .none: return nil
         }
-        let directory = support.appendingPathComponent("JVHD", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: directory.path) {
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        }
-        return directory.appendingPathComponent(fileName)
     }
 
-    // MARK: - Keychain / Secure Enclave
-
-    /// Trả về khoá riêng P-256 trong Secure Enclave/Keychain, tạo mới nếu chưa có.
-    /// Trả nil khi Keychain không dùng được — khi đó còn tệp khoá dự phòng.
-    func privateKey() -> SecKey? {
+    /// Khoá đang dùng + tầng dự phòng đã sinh ra nó.
+    func backend() -> Backend? {
         lock.lock()
         defer { lock.unlock() }
-        if let cached = cachedKey { return cached }
-        let key = loadKey(requiringSecureEnclave: true)
-            ?? loadKey(requiringSecureEnclave: false)
-            ?? createKey()
-        cachedKey = key
-        return key
+        if let cached = cached { return cached }
+        let resolved = loadExisting() ?? createKey()
+        cached = resolved
+        diagnostics["activeBackend"] = resolved?.name ?? "none"
+        diagnostics["hasKey"] = resolved != nil
+        return resolved
     }
 
-    private func baseQuery(requiringSecureEnclave: Bool) -> [String: Any] {
-        var query: [String: Any] = [
+    // MARK: - Nạp khoá đã có
+
+    private func loadExisting() -> Backend? {
+        if let key = loadKeychainKey() {
+            diagnostics["loadedFrom"] = "keychain"
+            return key.isSecureEnclaveBacked ? .secureEnclave(key) : .keychain(key)
+        }
+        if let key = loadCryptoKitKey() {
+            diagnostics["loadedFrom"] = "cryptokit-file"
+            return .cryptoKit(key)
+        }
+        return nil
+    }
+
+    private func baseQuery() -> [String: Any] {
+        return [
             kSecClass as String: kSecClassKey,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrApplicationTag as String: applicationTag,
             kSecReturnRef as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
-        if requiringSecureEnclave {
-            query[kSecAttrTokenID as String] = kSecAttrTokenIDSecureEnclave
-        }
-        return query
     }
 
-    private func loadKey(requiringSecureEnclave: Bool) -> SecKey? {
+    private func loadKeychainKey() -> SecKey? {
         var result: CFTypeRef?
-        let status = SecItemCopyMatching(baseQuery(requiringSecureEnclave: requiringSecureEnclave) as CFDictionary, &result)
-        guard status == errSecSuccess, let found = result else { return nil }
-        // `as! SecKey` từng làm crash app nếu Keychain trả về đối tượng khác;
-        // ở đây ép kiểu an toàn và ghi lại lý do.
-        guard let key = found as? SecKey else {
-            lastError = "keychain trả về đối tượng không phải SecKey"
+        let status = SecItemCopyMatching(baseQuery() as CFDictionary, &result)
+        guard status == errSecSuccess, let result = result else {
+            diagnostics["loadKeychainStatus"] = Int(status)
             return nil
         }
-        if requiringSecureEnclave { backend = .secureEnclave } else { backend = .keychain }
-        return key
+        // CFTypeRef của một key item phải là SecKey — kiểm tra kiểu trước khi ép
+        // để không bao giờ crash app chỉ vì một item lạ trong Keychain.
+        guard CFGetTypeID(result) == SecKeyGetTypeID() else { return nil }
+        return (result as! SecKey)
     }
 
-    private func createKey() -> SecKey? {
-        // Thử Secure Enclave trước (chỉ có trên máy thật).
-        if let secureEnclaveKey = createSecureEnclaveKey() {
-            backend = .secureEnclave
-            return secureEnclaveKey
-        }
-        let enclaveError = lastError
-        // Dự phòng: khoá Keychain thường (chạy được cả trên Simulator).
-        if let keychainKey = createKeychainKey() {
-            backend = .keychain
-            return keychainKey
-        }
-        lastError = "không tạo được khoá trong Keychain (Secure Enclave: \(enclaveError); Keychain: \(lastError))"
+    // MARK: - Tạo khoá mới (chuỗi dự phòng)
+
+    private func createKey() -> Backend? {
+        // 1) Secure Enclave — tốt nhất: khoá không thể trích xuất.
+        if let key = createSecureEnclaveKey() { return .secureEnclave(key) }
+        // 2) Keychain phần mềm — chạy cả trên Simulator / máy không có SE.
+        if let key = createKeychainKey() { return .keychain(key) }
+        // 3) CryptoKit + file trong Application Support — tương đương
+        //    `ensureDeviceKey()` của bản Node (ghi khoá ra đĩa, mode 0600).
+        //    Tầng này đảm bảo iOS KHÔNG BAO GIỜ hết khoá, giống Android.
+        if let key = createCryptoKitKey() { return .cryptoKit(key) }
         return nil
     }
 
     private func createSecureEnclaveKey() -> SecKey? {
+        // Thử có access control trước (khoá đòi mở máy), rồi thử không access
+        // control — một số cấu hình ký IPA không cho phép SecAccessControl.
         var accessError: Unmanaged<CFError>?
-        guard let access = SecAccessControlCreateWithFlags(
+        let access = SecAccessControlCreateWithFlags(
             nil,
             kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             [.privateKeyUsage],
             &accessError
-        ) else {
-            lastError = "SecAccessControl lỗi: \describe(accessError)"
-            return nil
+        )
+        if access == nil {
+            diagnostics["secureEnclaveAccessControlError"] = describe(accessError)
         }
 
+        if let access = access, let key = makeSecureEnclaveKey(accessControl: access, label: "withAccessControl") {
+            return key
+        }
+        if let key = makeSecureEnclaveKey(accessControl: nil, label: "noAccessControl") {
+            return key
+        }
+        return nil
+    }
+
+    private func makeSecureEnclaveKey(accessControl: SecAccessControl?, label: String) -> SecKey? {
+        // Chỉ dùng đúng các khoá thuộc tính hợp lệ ở cấp cao nhất của
+        // SecKeyCreateRandomKey (kSecAttrKeyType/kSecAttrKeySizeInBits/
+        // kSecAttrTokenID/kSecPrivateKeyAttrs) — các khoá lạ ở cấp này khiến
+        // một số bản iOS trả errSecParam.
+        var privateAttrs: [String: Any] = [
+            kSecAttrIsPermanent as String: true,
+            kSecAttrApplicationTag as String: applicationTag
+        ]
+        if let accessControl = accessControl {
+            privateAttrs[kSecAttrAccessControl as String] = accessControl
+        } else {
+            privateAttrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        }
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
             kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
-            kSecAttrApplicationTag as String: applicationTag,
-            kSecAttrIsPermanent as String: true,
-            kSecPrivateKeyAttrs as String: [
-                kSecAttrIsPermanent as String: true,
-                kSecAttrApplicationTag as String: applicationTag,
-                kSecAttrAccessControl as String: access
-            ]
+            kSecPrivateKeyAttrs as String: privateAttrs
         ]
         var error: Unmanaged<CFError>?
         guard let key = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
-            lastError = "SecKeyCreateRandomKey(Secure Enclave) lỗi: \describe(error)"
+            diagnostics["secureEnclave_\(label)"] = describe(error)
             return nil
         }
+        diagnostics["secureEnclave_\(label)"] = "ok"
         return key
     }
 
@@ -164,155 +178,152 @@ final class DeviceKey {
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
-            kSecAttrApplicationTag as String: applicationTag,
-            kSecAttrIsPermanent as String: true,
             kSecPrivateKeyAttrs as String: [
                 kSecAttrIsPermanent as String: true,
-                kSecAttrApplicationTag as String: applicationTag
+                kSecAttrApplicationTag as String: applicationTag,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             ]
         ]
         var error: Unmanaged<CFError>?
         guard let key = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
-            lastError = "SecKeyCreateRandomKey(Keychain) lỗi: \describe(error)"
+            diagnostics["keychainCreate"] = describe(error)
             return nil
+        }
+        diagnostics["keychainCreate"] = "ok"
+        return key
+    }
+
+    // MARK: - Dự phòng cuối: CryptoKit + file (giống ensureDeviceKey của Node)
+
+    private var keyFileURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let directory = base.appendingPathComponent("JVHD", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("device-key.bin")
+    }
+
+    private func loadCryptoKitKey() -> P256.Signing.PrivateKey? {
+        let url = keyFileURL
+        guard let raw = try? Data(contentsOf: url) else {
+            diagnostics["cryptoKitFile"] = "not-found"
+            return nil
+        }
+        do {
+            let key = try P256.Signing.PrivateKey(rawRepresentation: raw)
+            diagnostics["cryptoKitFile"] = "loaded"
+            return key
+        } catch {
+            diagnostics["cryptoKitFile"] = "corrupt: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    private func createCryptoKitKey() -> P256.Signing.PrivateKey? {
+        let key = P256.Signing.PrivateKey()
+        let url = keyFileURL
+        do {
+            try key.rawRepresentation.write(to: url, options: [.completeFileProtection])
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            diagnostics["cryptoKitFile"] = "created"
+        } catch {
+            // Không ghi được file thì vẫn dùng khoá trong phiên chạy này —
+            // thà phải bind lại còn hơn là không đăng nhập được.
+            diagnostics["cryptoKitFile"] = "in-memory (\(error.localizedDescription))"
         }
         return key
     }
 
-    private func describe(_ error: Unmanaged<CFError>?) -> String {
-        guard let error = error?.takeRetainedValue() else { return "không rõ" }
-        let ns = error as NSError
-        return "\(ns.domain)#\(ns.code)"
-    }
-
-    private func describe(_ error: Error) -> String {
-        let ns = error as NSError
-        return "\(ns.domain)#\(ns.code)"
-    }
-
-    // MARK: - Tệp khoá dự phòng (giống cách bản Windows giữ file PEM)
-
-    /// Khoá P-256 trong tệp. Tạo tệp ở lần chạy đầu; các lần sau đọc lại để
-    /// khoá KHÔNG đổi (nếu đổi, máy chủ sẽ báo "thiết bị không khớp").
-    private func fileKey() -> P256.Signing.PrivateKey? {
-        lock.lock()
-        defer { lock.unlock() }
-        if let cached = cachedFileKey { return cached }
-        if didTryFileKey { return nil }
-        didTryFileKey = true
-
-        guard let url = keyFileURL else {
-            lastError = "không tìm được Application Support để lưu khoá dự phòng"
-            return nil
-        }
-
-        if let saved = try? Data(contentsOf: url), saved.count == 32 {
-            do {
-                let key = try P256.Signing.PrivateKey(rawRepresentation: saved)
-                cachedFileKey = key
-                backend = .file
-                return key
-            } catch {
-                lastError = "tệp khoá hỏng, tạo lại: \describe(error)"
-            }
-        }
-
-        // Tạo khoá mới rồi ghi tệp. Chỉ ghi khi đọc-ghi an toàn (Data Protection).
-        let fresh = P256.Signing.PrivateKey()
-        do {
-            var mutableURL = url
-            var values = URLResourceValues()
-            values.isExcludedFromBackup = true
-            try? mutableURL.setResourceValues(values)
-            try fresh.rawRepresentation.write(to: mutableURL, options: .atomic)
-            try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen],
-                                                   ofItemAtPath: mutableURL.path)
-            cachedFileKey = fresh
-            backend = .file
-            return fresh
-        } catch {
-            lastError = "không ghi được tệp khoá dự phòng"
-            return nil
-        }
-    }
-
     // MARK: - d0(): khoá công khai
 
-    /// base64( 0x04 || X(32) || Y(32) ) — `pubKeyFormat = "raw-uncompressed-b64"`,
-    /// đúng 65 byte mà máy chủ kiểm tra (`pubFromRaw`: length==65 && raw[0]==4).
+    /// base64( 0x04 || X(32) || Y(32) ) — đúng định dạng `pubKeyFormat = "raw-uncompressed-b64"`.
+    /// `P256.Signing.PublicKey.rawRepresentation` của CryptoKit cũng đúng 65
+    /// byte dạng này, nên cả ba tầng cho ra CHUỖI CÙNG ĐỊNH DẠNG.
     func publicKeyBase64() -> String {
-        if let privateKey = privateKey() {
-            if let publicKey = SecKeyCopyPublicKey(privateKey),
-               let raw = SecKeyCopyExternalRepresentation(publicKey, nil) {
-                let data = raw as Data
-                if data.count == 65, data.first == 0x04 {
-                    return data.base64EncodedString()
-                }
-                lastError = "Secure Enclave/Keychain trả khoá công khai \(data.count) byte (cần 65)"
+        switch backend() {
+        case .secureEnclave(let key), .keychain(let key):
+            guard let publicKey = SecKeyCopyPublicKey(key) else {
+                diagnostics["publicKeyError"] = "SecKeyCopyPublicKey thất bại"
+                return ""
             }
-        }
-        if let key = fileKey() {
-            // x963Representation của CryptoKit chính là 0x04 || X || Y.
-            let data = key.publicKey.x963Representation
-            if data.count == 65, data.first == 0x04 {
-                return (data as Data).base64EncodedString()
+            var error: Unmanaged<CFError>?
+            guard let raw = SecKeyCopyExternalRepresentation(publicKey, &error) else {
+                diagnostics["publicKeyError"] = describe(error)
+                return ""
             }
-            lastError = "khoá tệp trả khoá công khai \(data.count) byte (cần 65)"
+            return (raw as Data).base64EncodedString()
+        case .cryptoKit(let key):
+            return Data(key.publicKey.rawRepresentation).base64EncodedString()
+        case .none:
+            diagnostics["publicKeyError"] = "không tạo được khoá thiết bị"
+            return ""
         }
-        if lastError.isEmpty { lastError = "không có khoá thiết bị" }
-        NSLog("[JVHD][DeviceKey] d0() thất bại: %@", lastError)
-        return ""
     }
 
     // MARK: - e0(): chữ ký
 
-    /// Định dạng chữ ký theo `JVHDConfig.sigFormat`, trả base64 (hoặc hex).
+    /// Ký dữ liệu thô (đã decode base64) bằng SHA-256 + ECDSA, trả về DER/base64.
+    /// Giống `crypto.sign('sha256', payload, key)` của bản Node: kể cả khi
+    /// `message` RỖNG vẫn phải trả về một chữ ký hợp lệ.
     ///
-    /// Điều QUAN TRỌNG nhất của hàm này: `SecKeyCreateSignature` chỉ tạo được
-    /// chữ ký dạng **ANSI X9.62** (nối `r||s`, 64 byte), trong khi máy chủ xác
-    /// thực và bản Android/Windows dùng **ASN.1 DER** (`der-b64`;
-    /// `tools/tool.js selfcheck` kiểm bằng `verify(..., "der")`). Nếu gửi nguyên
-    /// X9.62 thì `verifySig()` của server LUÔN trả false -> mọi lần đăng nhập iOS
-    /// bị từ chối. Vì vậy ở đây chuyển X9.62 -> DER (xem `JVHDCrypto.derEncodeRS`).
-    func signatureBase64(message: Data) -> String {
+    /// [BẢN SỬA NÀY] Đường Secure Enclave/Keychain trước đây trả NGUYÊN
+    /// `(signature as Data)` — tức định dạng **ANSI X9.62** (`r||s`, 64 byte) do
+    /// `SecKeyCreateSignature` sinh ra, trong khi `JVHDConfig.sigFormat` là
+    /// `"der-b64"` và máy chủ xác thực kiểm bằng
+    /// `crypto.createVerify("SHA256").update(data).verify(key, sig)` (chỉ đọc DER).
+    /// Trên iPhone thật, khoá LUÔN nằm ở Secure Enclave, nên mọi chữ ký iOS gửi lên
+    /// bị `verifySig()` trả `false`: thiết bị mới nhận `{status:"bad"}` (app báo
+    /// "Phiên xác thực hết hạn…"), thiết bị đã bind nhận `denied` ("Thiết bị không
+    /// khớp thiết bị đã đăng ký"). Máy build macOS không thấy được lỗi này vì ở đó
+    /// SecEnclave không khả dụng, `DeviceKey` rơi xuống nhánh CryptoKit (vốn đã trả
+    /// `derRepresentation`) — vì vậy bắt buộc phải có `derEncodeRS` + fixture check
+    /// trong CI (tools/ios_crypto_check) thay vì chỉ trông vào probe trên runner.
+    func signBase64(message: Data) -> String {
         let format = JVHDConfig.sigFormat.lowercased()
         let wantDer = !format.hasPrefix("raw")
-
-        if let key = privateKey() {
+        switch backend() {
+        case .secureEnclave(let key), .keychain(let key):
             var error: Unmanaged<CFError>?
-            let algorithm: SecKeyAlgorithm = .ecdsaSignatureMessageX962SHA256
-            if let signature = SecKeyCreateSignature(key, algorithm, message as CFData, &error) {
-                let body = signature as Data
-                if wantDer {
-                    if let der = JVHDCrypto.derEncodeRS(body) {
-                        return encodeSignature(der, format: format)
-                    }
-                    lastError = "chuyển X9.62 -> DER thất bại (\(body.count) byte)"
-                } else {
-                    return encodeSignature(body, format: format)
-                }
-            } else {
-                lastError = "SecKeyCreateSignature lỗi: \describe(error)"
+            guard let signature = SecKeyCreateSignature(
+                key,
+                .ecdsaSignatureMessageX962SHA256,
+                message as CFData,
+                &error
+            ) else {
+                diagnostics["signError"] = describe(error)
+                NSLog("[JVHD][DeviceKey] ký thất bại: %@", describe(error))
+                return ""
             }
-        }
-
-        if let key = fileKey() {
+            let x962 = signature as Data
+            guard wantDer else { return encodeSignature(x962, format: format) }
+            guard let der = JVHDCrypto.derEncodeRS(x962) else {
+                let reason = "chuyển X9.62 (\(x962.count) byte) -> DER thất bại"
+                diagnostics["signError"] = reason
+                NSLog("[JVHD][DeviceKey] %@", reason)
+                return ""
+            }
+            return encodeSignature(der, format: format)
+        case .cryptoKit(let key):
             do {
+                // `derRepresentation` đúng bằng chữ ký ASN.1 DER mà
+                // `crypto.sign(...)` của Node sinh ra (sigFormat = "der-b64").
                 let signature = try key.signature(for: message)
                 let body: Data = wantDer
-                    ? (signature.derRepresentation as Data)
-                    : (signature.rawRepresentation as Data)
+                    ? Data(signature.derRepresentation)
+                    : Data(signature.rawRepresentation)
                 return encodeSignature(body, format: format)
             } catch {
-                lastError = "CryptoKit ký thất bại: \describe(error)"
+                diagnostics["signError"] = error.localizedDescription
+                return ""
             }
+        case .none:
+            diagnostics["signError"] = "không có khoá thiết bị"
+            return ""
         }
-
-        if lastError.isEmpty { lastError = "không có khoá để ký" }
-        NSLog("[JVHD][DeviceKey] e0() thất bại: %@", lastError)
-        return ""
     }
 
+    /// Base64 (mặc định) hoặc hex, theo hậu tố của `JVHDConfig.sigFormat`
+    /// — cùng quy tắc `crypto-bridge.js` dùng cho bản Windows/Android.
     private func encodeSignature(_ body: Data, format: String) -> String {
         if format.contains("-hex") {
             return body.map { String(format: "%02x", $0) }.joined()
@@ -320,30 +331,20 @@ final class DeviceKey {
         return body.base64EncodedString()
     }
 
-    /// Bản tin chẩn đoán cho `/__native/diag`.
-    func statusDictionary() -> [String: Any] {
-        let publicValue = publicKeyBase64()
-        let probe = signatureBase64(message: Data("jvhd-self-probe".utf8))
-        var info: [String: Any] = [
-            "backend": backend.rawValue,
-            "keychainAvailable": privateKey() != nil,
-            "fileFallback": backend == .file,
-            "pubkeyBytes": Data(base64Encoded: publicValue)?.count ?? 0,
-            "pubkeyPrefix": String(publicValue.prefix(8)),
-            "sigFormat": JVHDConfig.sigFormat,
-            "signDigest": JVHDConfig.signDigest,
-            "challengeEncoding": JVHDConfig.challengeEncoding,
-            "signatureOk": !probe.isEmpty,
-            "signatureBytes": probe.isEmpty ? 0 : (Data(base64Encoded: probe)?.count ?? -1),
-            "lastError": lastError.isEmpty ? "không có lỗi" : lastError
-        ]
-        // Chữ ký DER hợp lệ phải bắt đầu bằng 0x30 (SEQUENCE) — kiểm tại chỗ để
-        // phát hiện ngay nếu định dạng lại lệch so với server.
-        if let decoded = Data(base64Encoded: probe), let first = decoded.first {
-            info["signatureIsDer"] = (first == 0x30)
-        } else {
-            info["signatureIsDer"] = false
-        }
-        return info
+    // MARK: - Tiện ích
+
+    private func describe(_ error: Unmanaged<CFError>?) -> String {
+        guard let error = error else { return "(không rõ)" }
+        let cfError = error.takeRetainedValue()
+        return "CFError \(CFErrorGetCode(cfError)): \(cfError.localizedDescription)"
+    }
+}
+
+private extension SecKey {
+    /// Khoá này có nằm trong Secure Enclave không (chỉ để ghi chẩn đoán).
+    var isSecureEnclaveBacked: Bool {
+        guard let attributes = SecKeyCopyAttributes(self) as? [String: Any] else { return false }
+        let token = attributes[kSecAttrTokenID as String] as? String
+        return token == (kSecAttrTokenIDSecureEnclave as String)
     }
 }

@@ -91,6 +91,13 @@ function fakeUpstreamAuth(req) {
 const BASE = "http://127.0.0.1:38755";
 const PUBKEY = Buffer.from([0x04].concat(new Array(64).fill(0x41))).toString("base64");
 
+// Chế độ của tầng native (mô phỏng DeviceKey.swift):
+//   "ok"    : mọi thứ chạy
+//   "empty" : /__native/d0 trả 500 rỗng (khoá thiết bị hỏng)
+//   "flaky" : lần gọi ĐẦU TIÊN trượt, lần sau chạy (XHR đồng bộ bị rớt)
+let nativeMode = "ok";
+let nativeCalls = { d0: 0, e0: 0 };
+
 // Các request mà proxy nội dung gửi LÊN upstream (để soi xem body có còn không).
 const proxiedUpstreamLog = [];
 
@@ -105,11 +112,21 @@ function handleLocal(req) {
     const name = String(u.searchParams.get("n") || "");
     return { status: 200, body: nodeBridge.c0(name, config), contentType: "text/plain" };
   }
-  if (pathname === "/__native/d0") return { status: 200, body: PUBKEY, contentType: "text/plain" };
+  if (pathname === "/__native/d0") {
+    nativeCalls.d0++;
+    if (nativeMode === "empty") return { status: 500, body: "", contentType: "text/plain" };
+    if (nativeMode === "flaky" && nativeCalls.d0 === 1) return { status: 500, body: "", contentType: "text/plain" };
+    return { status: 200, body: PUBKEY, contentType: "text/plain" };
+  }
   if (pathname === "/__native/e0") {
+    nativeCalls.e0++;
     // Chữ ký giả dạng base64 (bản thật ký ECDSA trong Secure Enclave).
-    const raw = Buffer.from("challenge-placeholder").toString("base64");
-    return { status: 200, body: Buffer.from("sig:" + raw).toString("base64"), contentType: "text/plain" };
+    // Swift THẬT (đã sửa) ký được cả payload rỗng; bản cũ trả 500 rỗng.
+    const body = req.body == null ? "" : String(req.body);
+    if (nativeMode === "empty") return { status: 500, body: "", contentType: "text/plain" };
+    if (nativeMode === "flaky" && nativeCalls.e0 === 1) return { status: 500, body: "", contentType: "text/plain" };
+    const raw = Buffer.from(body, "base64");
+    return { status: 200, body: Buffer.from("sig:" + raw.toString("hex")).toString("base64"), contentType: "text/plain" };
   }
   if (pathname === "/__native/api") {
     // stand-in cho LocalServer.swift:relayAPI() — GIỮ NGUYÊN method + body +
@@ -194,11 +211,11 @@ function makeXHR() {
 /* ====================================================================== *
  * 4. Nạp THẬT www/ios-bridge.js trong môi trường WKWebView mô phỏng
  * ====================================================================== */
-function loadRealBridge() {
+function loadRealBridge(pubkeyOverride) {
   let source = fs.readFileSync(path.join(__dirname, "..", "www", "ios-bridge.js"), "utf8");
   // đúng thứ tự LocalServer.swift:substituteRuntimePlaceholders()
   source = source.replace(/__JVHD_BASE_URL__/g, BASE)
-                 .replace(/__JVHD_PUBKEY__/g, PUBKEY)
+                 .replace(/__JVHD_PUBKEY__/g, pubkeyOverride === undefined ? PUBKEY : pubkeyOverride)
                  .replace(/__JVHD_SALT__/g, config.auth.salt)
                  .replace(/__JVHD_CONCAT__/g, config.auth.concat);
 
@@ -342,6 +359,54 @@ function main() {
   localXhr.send(null);
   eq(localXhr.responseText, "ok", "GET /__health cùng nguồn trả 'ok'");
   eq(proxiedUpstreamLog.length, 0, "request cùng nguồn KHÔNG đi qua proxy");
+
+  console.log("\n[6] Nhánh BIND đầy đủ: /auth/start -> d0() -> e0(nonce) -> /auth/bind");
+  upstreamLog.length = 0;
+  // Máy chủ trả {status:"bind", nonce:...} cho tài khoản hợp lệ CHƯA gắn thiết
+  // bị — đúng tình huống của một chiếc iPhone mới.
+  let bindFlowResult = null;
+  (function runBindFlow() {
+    const nonce = Buffer.from("brand-new-device-nonce-32-bytes!!").toString("base64");
+    jvhdUserAuthRequest(XHR, AUTH_ORIGIN, "/auth/start", { h: iosHash }, (r) => {
+      // app.js:submitJvhdUserGate() — chép đúng trình tự.
+      const devicePub = bridge.window.AndroidBridge.d0();
+      const bindSig = devicePub ? bridge.window.AndroidBridge.e0(nonce) : "";
+      ok(!!devicePub, "d0() khác rỗng ở nhánh bind (rỗng = \"Thiết bị không hỗ trợ xác thực\")");
+      ok(typeof bindSig === "string" && bindSig.length > 0,
+         "e0(nonce) khác rỗng ở nhánh bind (rỗng = \"Thiết bị không hỗ trợ xác thực\")");
+      jvhdUserAuthRequest(XHR, AUTH_ORIGIN, "/auth/bind",
+        { h: iosHash, k: devicePub, nonce: nonce, sig: bindSig },
+        (b) => { bindFlowResult = b; }, (e) => { bindFlowResult = { error: String(e) }; });
+    }, () => {});
+  })();
+  const bindHit = upstreamLog[upstreamLog.length - 1] || null;
+  eq(bindHit && bindHit.method, "POST", "/auth/bind tới server bằng POST");
+  let bindParsed = null;
+  try { bindParsed = JSON.parse(bindHit && bindHit.body); } catch (e) { bindParsed = null; }
+  ok(!!(bindParsed && bindParsed.k && bindParsed.sig && bindParsed.nonce),
+     "body /auth/bind có đủ h/k/nonce/sig (không trường nào rỗng)");
+  eq(bindFlowResult && bindFlowResult.status, "ok", "server nhận bind -> ĐĂNG NHẬP THÀNH CÔNG");
+
+  console.log("\n[7] e0() LUÔN trả chuỗi — kể cả payload rỗng/lạ (parity với Node)");
+  ["", "aGVsbG8=", "n8Kd2-sX91_qW", "!!!"].forEach((sample) => {
+    const value = bridge.window.AndroidBridge.e0(sample);
+    ok(typeof value === "string" && value.length > 0,
+       "e0(" + JSON.stringify(sample) + ") trả chuỗi khác rỗng");
+  });
+
+  console.log("\n[8] Dự phòng của ios-bridge.js khi tầng native trượt");
+  // Swift chèn PUBKEY rỗng (DeviceKey hỏng lúc khởi động) -> phải hỏi native.
+  nativeMode = "flaky"; nativeCalls = { d0: 0, e0: 0 };
+  const bridge2 = loadRealBridge("");
+  ok(bridge2.window.AndroidBridge.d0() === PUBKEY,
+     "d0() thử lại lần 2 khi lượt đầu trượt (không báo \"thiết bị không hỗ trợ\" vội)");
+  ok(bridge2.window.AndroidBridge.e0("aGVsbG8=").length > 0,
+     "e0() cũng thử lại lần 2 khi lượt đầu trượt");
+  nativeMode = "empty"; nativeCalls = { d0: 0, e0: 0 };
+  const bridge3 = loadRealBridge("");
+  eq(bridge3.window.AndroidBridge.d0(), "", "native hỏng hẳn -> d0() trả rỗng (app.js sẽ chặn, có log chẩn đoán)");
+  eq(typeof bridge3.window.AndroidBridge.e0("aGVsbG8="), "string", "e0() vẫn trả CHUỖI khi native hỏng");
+  nativeMode = "ok"; nativeCalls = { d0: 0, e0: 0 };
 
   console.log("\n==============================================");
   console.log("  PASS: " + pass + "   FAIL: " + fail);

@@ -13,7 +13,7 @@
  *   · tầng native iOS        : mô phỏng ĐÚNG hai chế độ của DeviceKey.swift —
  *                              "legacy" (trước bản sửa: SecKeyCreateSignature trả
  *                              ANSI X9.62, signChallenge fail khi chuỗi rỗng) và
- *                              "fixed" (derEncodeRS + decodeBase64NodeLike).
+ *                              "fixed" (derEncodeRS + decodeBase64NodeCompatible).
  *   · bước đi của app.js     : trình tự submitJvhdUserGate() chép nguyên văn,
  *                              kèm kiểm tra NGUYÊN VĂN để phát hiện lệch (xem
  *                              guardAppFlowUnchanged()).
@@ -186,8 +186,8 @@ const server = {
 const sentToAuth = [];     // mọi request tới máy chủ xác thực (method + path + body)
 const sentElsewhere = [];  // để chứng minh iOS không đụng JSONBin
 
-/** decodeBase64NodeLike() — luật đã kiểm 4020 mẫu khớp Buffer.from(x,'base64'). */
-function decodeBase64NodeLike(text) {
+/** decodeBase64NodeCompatible() — luật đã kiểm 4020 mẫu khớp Buffer.from(x,'base64'). */
+function decodeBase64NodeCompatible(text) {
   const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   const table = new Int16Array(256).fill(-1);
   for (let i = 0; i < 64; i++) table[ALPHABET.charCodeAt(i)] = i;
@@ -228,15 +228,18 @@ function makeLocalHandler(options) {
       return { status: 200, body: nodeBridge.c0(String(u.searchParams.get("n") || ""), config) };
     }
     if (p === "/__native/d0") {
-      if (!keyAvailable) return { status: 503, body: "ERR: SecKeyCreateRandomKey(Keychain) lỗi: -34018#errSecMissingEntitlement" };
+      // Giống hỡi LocalServer.swift:keyFailureBody() — 500 + "ERR: <tóm tắt>"
+      if (!keyAvailable) {
+        return { status: 500, body: "ERR: backend=none · keychain=OSStatus -34018 · d0=SecKeyCreateRandomKey lỗi: errSecMissingEntitlement#-34018" };
+      }
       return { status: 200, body: (options.keyPair || device).pub };
     }
     if (p === "/__native/e0") {
-      if (!keyAvailable) return { status: 503, body: "ERR: không có khoá để ký" };
+      if (!keyAvailable) return { status: 500, body: "ERR: backend=none · e0=không có khoá thiết bị" };
       const payload = String(req.body || "");
       // OLD: decodeBase64Loose -> guard let else return "" -> 500 -> bridge trả ""
-      // NEW: decodeBase64NodeLike -> luôn ký (kể cả dữ liệu rỗng), như Node
-      const message = mode === "legacy" ? decodeBase64LooseLegacy(payload) : decodeBase64NodeLike(payload);
+      // NEW: decodeBase64NodeCompatible -> luôn ký (kể cả dữ liệu rỗng), như Node
+      const message = mode === "legacy" ? decodeBase64LooseLegacy(payload) : decodeBase64NodeCompatible(payload);
       if (!message) return { status: 500, body: "" };
       const signature = iosSignRaw(message, mode, options.keyPair);
       if (!signature) return { status: 500, body: "ERR: chuyển X9.62 -> DER thất bại" };
@@ -453,9 +456,9 @@ console.log("\n[0] Tự kiểm bộ đóng gói DER dùng trong file này");
   ok(bad === 0, "derEncodeRS mô phỏng khớp " + fixtures.signatures.length + " mẫu DER chuẩn OpenSSL");
   let badB64 = 0;
   for (const item of fixtures.base64) {
-    if (decodeBase64NodeLike(item.input).toString("hex") !== item.out) badB64++;
+    if (decodeBase64NodeCompatible(item.input).toString("hex") !== item.out) badB64++;
   }
-  ok(badB64 === 0, "decodeBase64NodeLike mô phỏng khớp Buffer.from(x,'base64') trên " + fixtures.base64.length + " mẫu");
+  ok(badB64 === 0, "decodeBase64NodeCompatible mô phỏng khớp Buffer.from(x,'base64') trên " + fixtures.base64.length + " mẫu");
 }
 
 console.log("\n[1] iOS bản CŨ (chưa sửa) trên THIẾT BỊ MỚI — định dạng chữ ký bị server bác");
@@ -549,7 +552,7 @@ console.log("\n[6] Challenge rỗng / không phải base64 — bản cũ sinh ra
   ok(String(sig).length > 0, "đã sửa: e0('') vẫn trả chữ ký (giống Node crypto.sign trên buffer rỗng)");
   const weird = fixed.window.AndroidBridge.e0("###khong phai base64###");
   ok(String(weird).length > 0, "đã sửa: e0(chuỗi lạ) không chết, ký trên byte Node cũng sẽ ký");
-  eq(verifySig(pubFromRaw(device.pub), decodeBase64NodeLike(""), String(sig)), true,
+  eq(verifySig(pubFromRaw(device.pub), decodeBase64NodeCompatible(""), String(sig)), true,
      "chữ ký của e0('') verify đúng trên dữ liệu mà Node sẽ ký (Buffer.from('','base64'))");
 }
 
@@ -559,7 +562,7 @@ console.log("\n[7] Không lấy được khoá: câu lỗi phải nói rõ bư�
   const bridge = sandbox.window.AndroidBridge;
   eq(bridge.d0(), "", "d0() rỗng khi Keychain bị chặn");
   const status = sandbox.window.JVHDiOS.authStatus();
-  ok(/lý-do=.*errSecMissingEntitlement/.test(status), "authStatus() nêu lý do thật: " + status);
+  ok(/lý-do=.*errSecMissingEntitlement/.test(status), "lý do tầng khoá được đưa lên câu lỗi (không còn mơ hồ): " + status);
   const out = runGate(sandbox);
   eq(out.outcome, "hard", "vẫn fail-closed (không cho qua khi không có khoá) — đúng như Android");
 }
