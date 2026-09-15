@@ -93,6 +93,26 @@ jobs:
           test -d www || { echo "::error::Thiếu thư mục www"; exit 1; }
           /usr/libexec/PlistBuddy -c 'Print' ios/JVHD/Info.plist | head -20
 
+      # ------------------------------------------------- tự kiểm (không cần máy) --
+      # Chạy TRƯỚC khi build để lỗi logic hiện ra sau ~10 giây thay vì sau 2 phút
+      # biên dịch, và để lỗi được đăng lên PR nhờ bước "Đăng lỗi build lên PR".
+      - name: "Tự kiểm Node: cầu nối iOS, luồng xác thực, không đổi JSONBin"
+        run: |
+          node --version
+          node test/node_test.js
+          node test/ios_auth_test.js
+          node test/ios_auth_flow_test.js
+
+      # Thuật toán DER/base64 của Swift được kiểm bằng fixture sinh từ Node/OpenSSL.
+      # Đây là phần dễ sai nhất và KHÔNG thể kiểm bằng JS.
+      - name: "Tự kiểm thuật toán iOS (X9.62 -> DER, base64 kiểu Node) bằng swiftc"
+        run: |
+          mkdir -p build
+          xcrun --sdk macosx swiftc -O \
+            -o build/ios-crypto-check \
+            ios/JVHD/Crypto.swift tools/ios_crypto_check/main.swift
+          ./build/ios-crypto-check test/der_fixtures.json
+
       # ---------------------------------------------------------------- ký --
       - name: Nhập chứng thư & provisioning profile
         if: steps.setup.outputs.sign == 'true'

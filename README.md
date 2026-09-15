@@ -28,6 +28,13 @@ gh run download <run-id> -n JVHD-unsigned-ipa   # (cách cũ, cần máy tính +
 Chi tiết kiến trúc, cách ký/cài lên iPhone và các giới hạn:
 **[ios/README.md](ios/README.md)**.
 
+> **Gặp lỗi đăng nhập trên iOS?** Nếu màn hình báo
+> *“Thiết bị không hỗ trợ xác thực, không thể tiếp tục”* thì đó **không** phải
+> tài khoản sai — đó là lúc app không lấy được khoá chữ ký của máy. Nguyên nhân,
+> cách sửa và cách đọc chẩn đoán (`/__native/diag`) nằm ở mục
+> [Lỗi “Thiết bị không hỗ trợ xác thực”](ios/README.md#lỗi-thiết-bị-không-hỗ-trợ-xác-thực--không-thể-tiếp-tục-ios--nguyên-nhân--cách-sửa)
+> trong `ios/README.md`. Server xác thực và dữ liệu JSONBin không thay đổi.
+
 Tóm tắt:
 
 * Ứng dụng Swift thuần (iOS 16+) bọc `WKWebView` quanh `www/index.html`.

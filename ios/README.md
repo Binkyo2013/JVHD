@@ -66,8 +66,8 @@ viết bằng Swift** để thay thế hoàn toàn phần Node.js/Electron của
 |----------------------------|--------------------------------------------------------------------|
 | `proxyMedia(url, referer)` | Tạo URL `/jvhd-media/?u=<b64>&r=<b64>` ngay trong JS                |
 | `c0(name)`                 | SHA-256 thuần JS (đã kiểm chứng khớp `crypto-bridge.js`, test vector `Admin2 → 37b5d924…`) |
-| `d0()`                     | Khoá công khai do Swift chèn sẵn (lấy từ Secure Enclave lúc mở app) |
-| `e0(data)`                 | XHR **đồng bộ** tới `http://127.0.0.1/__native/e0` → ký bằng Secure Enclave |
+| `d0()`                     | XHR **đồng bộ** tới `/__native/d0` → khoá công khai của khoá đang ký (Secure Enclave → Keychain → tệp). Bản Swift chèn sẵn chỉ dùng khi native không trả lời |
+| `e0(data)`                 | XHR **đồng bộ** tới `http://127.0.0.1/__native/e0` → ký ECDSA, xuất **ASN.1 DER** theo `sigFormat:"der-b64"` |
 | `exitApp()`                | iOS không cho phép app tự thoát → hiện thông báo                     |
 
 Khoá riêng **không bao giờ** rời khỏi thiết bị và không bao giờ được đưa vào
@@ -108,6 +108,66 @@ node test/ios_auth_test.js   # bản iOS: nạp THẬT www/ios-bridge.js rồi c
 bảng định tuyến của `LocalServer.swift`, rồi soi chính xác method/body/
 Content-Type mà máy chủ xác thực nhận được — nên nó bắt lại được đúng lỗi kể
 trên và khoá không cho tái diễn.
+
+### Lỗi “Thiết bị không hỗ trợ xác thực, không thể tiếp tục” (iOS) — nguyên nhân & cách sửa
+
+Câu này trong `www/app.js` **không** nghĩa là máy chủ từ chối tài khoản. Nó là
+nhánh *fail-closed* in ra khi **chính máy** không tạo được khoá/chữ ký, tức
+`bridge.d0()` hoặc `bridge.e0()` trả chuỗi rỗng:
+
+```js
+if (!devicePub || !bindSig) { jvhdUserAuthHardError(); return; }   // nhánh bind
+if (!sig)                  { jvhdUserAuthHardError(); return; }   // nhánh challenge
+```
+
+Ba khiếm khuyết phía iOS đã được sửa (`DeviceKey.swift`, `Crypto.swift`,
+`LocalServer.swift`, `ios-bridge.js`); server xác thực và JSONBin **không đổi**:
+
+| # | Khiếm khuyết trên iOS (Android/Windows không có) | Hệ quả | Bản sửa |
+|---|---|---|---|
+| 1 | Khoá thiết bị chỉ lấy được từ **Secure Enclave/Keychain**. IPA không ký / ký lại bằng chứng thư cá nhân không cấp `keychain-access-groups`, hoặc app bị cài đè làm đổi access group ⇒ Keychain trả lỗi, `publicKeyBase64()` trả `""`. | `d0()` rỗng → **đúng câu lỗi người dùng thấy**, thiết bị mới không bao giờ bind được | Thêm nguồn khoá thứ 3: **tệp** `Application Support/JVHD/jvhd-device-key.raw` (khoá P-256 của CryptoKit, Data Protection `completeUnlessOpen`) — y như cách bản Windows giữ tệp PEM trong `ensureDeviceKey()`. Thứ tự: Secure Enclave → Keychain → tệp |
+| 2 | `Config.swift` hứa `sigFormat = "der-b64"` nhưng `SecKeyCreateSignature(.ecdsaSignatureMessageX962SHA256)` chỉ xuất **ANSI X9.62** (`r‖s`, 64 byte) — chữ ký được gửi **nguyên trạng** | `verifySig()` của server luôn `false` → bind báo *“Phiên xác thực hết hạn, vui lòng thử lại”*, thiết bị đã bind báo *“Thiết bị không khớp thiết bị đã đăng ký”* (và đếm vào khoá 3 phút) | `JVHDCrypto.derEncodeRS()` chuyển X9.62 → **ASN.1 DER**; `sigFormat`/`signDigest`/`challengeEncoding` giờ được tôn trọng thật sự, giống `crypto-bridge.js` |
+| 3 | `signChallenge()` dùng `decodeBase64Loose()` + `guard … else return ""`: chuỗi rỗng hoặc có ký tự ngoài bảng ⇒ **không ký** ⇒ HTTP 500 ⇒ `e0()` = `""` | Mọi lệch nhỏ về định dạng challenge/nonce biến thành câu “thiết bị không hỗ trợ xác thực”, không thử lại được | `JVHDCrypto.decodeBase64NodeLike()`: mô phỏng **đúng** `Buffer.from(text,'base64')` (bỏ ký tự lạ, dừng ở `=`, vẫn ký dữ liệu rỗng). Luật này đã kiểm 4020 mẫu khớp Node |
+
+Vì sao Android không vướng: `BtK.pk()/BtK.sg()` trong `libbtcore.so` lấy khoá từ
+Android Keystore (luôn có) và ký ra DER; bản Windows dùng `crypto.sign` (cũng
+DER) với khoá trong tệp. Cả ba giờ đây tạo **cùng một loại dữ liệu**
+`{h, k, nonce, sig}` và chỉ ghi đúng một bản ghi `{k, at}` như trước.
+
+**Chẩn đoán trên máy thật** (lần đầu tiên câu lỗi này nói cho bạn biết hỏng ở đâu):
+
+* màn hình xác thực giờ hiển thị thêm `— iOS: c0=ok · pubkey=… · base=ok · lý-do=…`;
+* `GET http://127.0.0.1:<cổng>/__native/diag` trả JSON: `backend`
+  (`secure-enclave` / `keychain` / `file`), `pubkeyBytes` (phải = 65),
+  `signatureIsDer` (phải = `true`), `lastError`.
+
+### Kiểm thử
+
+```bash
+node test/node_test.js            # bản Windows: crypto + local server + proxy HLS
+node test/ios_auth_test.js        # cầu nối iOS: method/body/Content-Type tới server
+node test/ios_auth_flow_test.js   # CẢ LUỒNG bind/verify bằng quy tắc THẬT của server
+node test/gen_der_fixtures.js     # sinh lại mẫu DER/base64 chuẩn Node/OpenSSL
+```
+
+`ios_auth_flow_test.js` chép nguyên văn quy tắc của máy chủ xác thực
+(`hkrmta-code/jvhd-auth` commit `d61e85787`: `CRYPTO_HASH_RE`, `pubFromRaw`,
+`verifySig`, `newNonce`, `takeNonce`, `handleStart/Bind/Verify`) để kiểm **end-to-end**:
+
+* thiết bị iOS mới: `start → bind → ok`, `k` đúng 65 byte, server ghi đúng
+  `{k, at}` và **chỉ 1** bản ghi;
+* lần mở sau: `start → challenge → verify → ok`, không ghi thêm gì;
+* thiết bị thứ hai dùng cùng tài khoản: vẫn bị `denied`, binding cũ không bị đè;
+* mô phỏng đúng bản cũ (X9.62 / Keychain hỏng) để chứng minh hai lỗi trên là
+  nguyên nhân, và để không ai tái phạm;
+* **không** có request nào tới `api.jsonbin.io` từ cầu nối iOS.
+
+Định dạng DER/base64 của Swift còn được kiểm trong CI bằng `swiftc` thật:
+
+```bash
+xcrun --sdk macosx swiftc -O -o build/ios-crypto-check \
+  ios/JVHD/Crypto.swift tools/ios_crypto_check/main.swift && ./build/ios-crypto-check test/der_fixtures.json
+```
 
 ## 4. Build
 

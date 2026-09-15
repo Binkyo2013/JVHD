@@ -37,6 +37,10 @@
      * 0. Tiện ích
      * ------------------------------------------------------------------ */
     var lastError = "";
+    // Lý do kỹ thuật gần nhất mà tầng native báo về (chuỗi sau "ERR:").
+    var lastReason = "";
+    // Bản khoá công khai lấy từ native — xem d0() để biết vì sao cần cache.
+    var cachedPub = "";
     function log() {
         try { console.log.apply(console, ["[JVHD-iOS]"].concat([].slice.call(arguments))); } catch (e) {}
     }
@@ -158,9 +162,16 @@
             xhr.open("POST", url, false); // đồng bộ
             xhr.setRequestHeader("Content-Type", "text/plain;charset=utf-8");
             xhr.send(payload == null ? "" : payload);
-            if (xhr.status >= 200 && xhr.status < 400) return xhr.responseText || "";
-            lastError = "nativeCall " + path + " -> HTTP " + xhr.status;
+            var text = xhr.responseText || "";
+            if (xhr.status >= 200 && xhr.status < 400) return text;
+            // Khi thiếu khoá, Swift trả 503 kèm "ERR: <lý do>". Giữ lại lý do để
+            // báo đúng bước hỏng (trước đây mọi lỗi đều chỉ còn "thiết bị không
+            // hỗ trợ xác thực", không ai biết hỏng ở khâu nào).
+            if (text.indexOf("ERR:") === 0) lastReason = text.slice(4).replace(/^\s+/, "");
+            else lastReason = "HTTP " + xhr.status;
+            lastError = "nativeCall " + path + " -> " + lastReason;
         } catch (e) {
+            lastReason = "exception " + e;
             lastError = "nativeCall " + path + " -> " + e;
         }
         log(lastError);
@@ -199,7 +210,19 @@
             postNative({ action: "close" });
         },
         exitApp: function () { postNative({ action: "exit" }); },
-        toast: function (text) { postNative({ action: "toast", text: String(text || "") }); }
+        toast: function (text) { postNative({ action: "toast", text: String(text || "") }); },
+        /// Trạng thái cầu nối xác thực, dùng cho thông báo lỗi trên iOS.
+        /// Không phát sinh request mạng: chỉ đọc những gì đã biết.
+        authStatus: function () {
+            var parts = [];
+            parts.push("c0=" + (typeof sha256Hex === "function" ? "ok" : "khong"));
+            parts.push("pubkey=" + (cachedPub ? "native" : (PUBKEY && PUBKEY.indexOf("__") !== 0 ? "chèn-sẵn" : "trống")));
+            parts.push("base=" + (BASE ? "ok" : "trống"));
+            if (lastReason) parts.push("lý-do=" + lastReason);
+            return parts.join(" · ");
+        },
+        /// Lý do kỹ thuật gần nhất (rỗng nếu chưa có lỗi).
+        lastReason: function () { return lastReason; }
     };
     window.JVHDiOS = JVHDiOS;
 
@@ -237,13 +260,32 @@
                 } catch (e) {}
                 return nativeCall("/__native/c0?n=" + encodeURIComponent(String(name == null ? "" : name)), "");
             },
-            // Khoá công khai thiết bị (Secure Enclave) — Swift chèn sẵn.
+            // Khoá công khai thiết bị.
+            // LUÔN hỏi native trước: khoá dùng để KÝ nằm trong Secure Enclave /
+            // Keychain / tệp khoá, còn `__JVHD_PUBKEY__` chèn lúc phục vụ trang
+            // chỉ là bản sao. Nếu khoá được tạo SAU lúc chèn (lần mở đầu tiên)
+            // hoặc được tạo lại sau khi cài đè app, bản sao đó lệch -> server bind
+            // với khoá không khớp chữ ký -> lần sau vào app báo "thiết bị không
+            // khớp". Vì vậy chỉ dùng PUBKEY làm dự phòng khi native không trả lời.
             d0: function () {
+                var value = nativeCall("/__native/d0", "");
+                if (/^[A-Za-z0-9+/=]{40,}$/.test(String(value))) {
+                    cachedPub = value;
+                    return value;
+                }
+                if (cachedPub) return cachedPub;
                 if (PUBKEY && PUBKEY.indexOf("__") !== 0) return PUBKEY;
-                return nativeCall("/__native/d0", "");
+                return "";
             },
-            // Chữ ký ECDSA — bắt buộc phải qua native (khoá không rời thiết bị).
-            e0: function (data) { return nativeCall("/__native/e0", String(data == null ? "" : data)); },
+            // Chữ ký ECDSA — bắt buộc qua native (khoá không rời thiết bị).
+            // Thử lại một lần: lần gọi đầu có thể kích hoạt việc tạo khoá, và Secure
+            // Enclave đôi khi bận ngay sau khi mở app.
+            e0: function (data) {
+                var text = String(data == null ? "" : data);
+                var signature = nativeCall("/__native/e0", text);
+                if (signature) return signature;
+                return nativeCall("/__native/e0", text);
+            },
             // iOS không cho phép app tự thoát -> đưa app về nền (hành vi chuẩn iOS).
             exitApp: function () { JVHDiOS.exitApp(); return "1"; },
             // Các hàm phụ của tizen_shim (không dùng trên iOS).
