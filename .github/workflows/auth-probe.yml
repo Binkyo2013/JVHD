@@ -68,16 +68,20 @@ jobs:
 
       - name: '3b) Type-check TOÀN BỘ mã Swift của app'
         run: |
-          set -e
+          set -o pipefail
           { echo; echo "### swiftc -typecheck (iphonesimulator)"; } >> diag/auth-probe.txt
-          xcrun -sdk iphonesimulator swiftc -typecheck \
-            -target arm64-apple-ios16.0-simulator \
-            ios/JVHD/*.swift 2>&1 | tee -a diag/auth-probe.txt || true
-          echo "type-check xong" | tee -a diag/auth-probe.txt
+          if xcrun -sdk iphonesimulator swiftc -typecheck \
+               -target arm64-apple-ios16.0-simulator \
+               ios/JVHD/*.swift 2>&1 | tee -a diag/auth-probe.txt; then
+            echo "type-check OK" | tee -a diag/auth-probe.txt
+          else
+            echo "TYPE-CHECK THẤT BẠI" | tee -a diag/auth-probe.txt
+            exit 1
+          fi
 
       - name: '3c) Biên dịch Config/Crypto/DeviceKey.swift + harness'
         run: |
-          set -e
+          set -eo pipefail
           { echo; echo "### swiftc harness"; } >> diag/auth-probe.txt
           swiftc -O \
             ios/JVHD/Config.swift \

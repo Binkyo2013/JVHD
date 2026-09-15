@@ -32,7 +32,7 @@ final class DeviceKey {
     /// bao giờ phải đoán mò khi đăng nhập lỗi nữa).
     private(set) var diagnostics: [String: Any] = [:]
 
-    private enum Backend {
+    enum Backend {
         case secureEnclave(SecKey)
         case keychain(SecKey)
         case cryptoKit(P256.Signing.PrivateKey)
@@ -276,7 +276,7 @@ final class DeviceKey {
                 &error
             ) else {
                 diagnostics["signError"] = describe(error)
-                NSLog("[JVHD][DeviceKey] ký thất bại: %@", describe(error) ?? "(không rõ)")
+                NSLog("[JVHD][DeviceKey] ký thất bại: %@", describe(error))
                 return ""
             }
             return (signature as Data).base64EncodedString()
