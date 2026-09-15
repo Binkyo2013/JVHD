@@ -96,18 +96,63 @@ WebView.
 > WebView Android chạy không bắt buộc CORS nên `app.js` gọi thẳng máy chủ.
 > `/jvhd-media` vẫn giữ nguyên 100% hành vi cũ cho nội dung/HLS.
 
+> **Lỗi “Thiết bị không hỗ trợ xác thực, không thể tiếp tục” (đã sửa):**
+> `app.js` chỉ hiện câu này khi `c0/d0/e0` thiếu **hoặc khi `d0()`/`e0()` trả
+> về chuỗi RỖNG**. Hợp đồng của bản Android/Windows
+> (`src/crypto-bridge.js`) là *không bao giờ rỗng*: `ensureDeviceKey()` luôn
+> tạo khoá (ghi PEM ra đĩa nếu chưa có) và `e0()` dùng
+> `Buffer.from(x, 'base64')` — hàm này **không bao giờ lỗi**, kể cả với chuỗi
+> rỗng, nên luôn có chữ ký. iOS vi phạm đúng hai chỗ đó:
+>
+> 1. **`e0()`** — `LocalServer.signChallenge()` giải mã nonce/challenge bằng
+>    `Data(base64Encoded:)`. Foundation trả `nil` cho chuỗi rỗng hoặc chuỗi
+>    không phải base64 chuẩn → bỏ qua bước ký → `e0()` = `""` → `app.js` chặn
+>    đăng nhập. Android với cùng dữ liệu đó vẫn ký và vẫn vào được.
+> 2. **`d0()`** — tạo khoá Secure Enclave **thất bại với `errSecMissingEntitlement`
+>    (-34018)** trên IPA không có entitlement (đúng cấu hình build của kho này:
+>    `CODE_SIGNING_ALLOWED=NO`, ký lại bằng AltStore/Sideloadly). Khi tầng dự
+>    phòng cũng trượt, `DeviceKey` trả `""` và `/__native/d0` đáp `HTTP 500`
+>    → `d0()` = `""` → cùng một thông báo lỗi.
+>
+> Cách sửa (chỉ phía iOS, không đụng Android/Windows/JSONBin):
+> `Crypto.decodeBase64NodeCompatible()` tái hiện **đúng từng byte** ngữ nghĩa
+> `Buffer.from(x,'base64')` của Node; `DeviceKey` có ba tầng dự phòng
+> (Secure Enclave → Keychain → khoá CryptoKit lưu file, tương đương PEM của
+> bản Node) kèm chẩn đoán; `ios-bridge.js` thử lại lời gọi native một lần và
+> luôn trả về chuỗi. Kiểm tra tầng khoá đang dùng ngay trên máy:
+> mở Safari → Web Inspector → console → `__jvhdNativeDiagnostics()`, hoặc
+> `http://127.0.0.1:<cổng>/__native/env` (mục `deviceKey`).
+
 ### Kiểm thử
 
 ```bash
 node test/node_test.js       # bản Windows: crypto + local server + proxy HLS
 node test/ios_auth_test.js   # bản iOS: nạp THẬT www/ios-bridge.js rồi chạy
                              # đúng luồng POST /auth/start → e0 → /auth/verify
+                             # và cả nhánh /auth/bind của thiết bị MỚI
 ```
 
 `ios_auth_test.js` dựng lại môi trường WKWebView (stub `XMLHttpRequest`) cùng
 bảng định tuyến của `LocalServer.swift`, rồi soi chính xác method/body/
 Content-Type mà máy chủ xác thực nhận được — nên nó bắt lại được đúng lỗi kể
 trên và khoá không cho tái diễn.
+
+Ngoài ra, **mỗi lần build IPA** workflow chạy thêm
+`tools/native_crypto_main.swift`: biên dịch THẬT `Config.swift` + `Crypto.swift`
++ `DeviceKey.swift` rồi in `d0()`/`e0()` ra để `tools/verify_swift_sig.js`
+kiểm chứng bằng `crypto` của Node — chính thư viện bản Android/Windows dùng.
+Ba điều bắt buộc đúng, sai là build dừng:
+
+| Kiểm tra | Ý nghĩa |
+|----------|---------|
+| `d0()` = 65 byte `0x04‖X‖Y`, Node đọc thành khoá P-256 | khớp `pubKeyFormat` |
+| Node `crypto.verify` được chữ ký Swift | khớp `sigFormat` + `challengeEncoding` |
+| `e0('')` **khác rỗng** và verify được trên message rỗng | parity với `Buffer.from(x,'base64')` của Node — đây chính là điều kiện gây ra lỗi *“Thiết bị không hỗ trợ xác thực”* |
+
+`tools/auth_probe.js` (chạy tay: `node tools/auth_probe.js <hash>`) đọc hợp đồng
+của máy chủ xác thực đang chạy — `POST /auth/start` trả
+`{status:"challenge"|"bind"|"unknown", …}`. Nó **không bao giờ** gọi
+`/auth/bind`, nên không thể tạo/ghi đè/xoá ràng buộc thiết bị trên JSONBin.
 
 ## 4. Build
 

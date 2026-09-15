@@ -404,6 +404,10 @@ final class LocalServer: NSObject {
                                keepAlive: request.isKeepAlive)
         case "/__native/d0":
             let pub = DeviceKey.shared.publicKeyBase64()
+            if pub.isEmpty {
+                NSLog("[JVHD][native] /__native/d0 RỖNG — chẩn đoán khoá: %@",
+                      String(describing: DeviceKey.shared.diagnostics))
+            }
             let status = pub.isEmpty ? 500 : 200
             connection.respond(status: status,
                                headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
@@ -412,6 +416,10 @@ final class LocalServer: NSObject {
         case "/__native/e0":
             let payload = request.body.isEmpty ? (request.query["d"] ?? "") : (String(data: request.body, encoding: .utf8) ?? "")
             let signature = signChallenge(payload)
+            if signature.isEmpty {
+                NSLog("[JVHD][native] /__native/e0 RỖNG — chẩn đoán khoá: %@",
+                      String(describing: DeviceKey.shared.diagnostics))
+            }
             let status = signature.isEmpty ? 500 : 200
             connection.respond(status: status,
                                headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
@@ -511,16 +519,19 @@ final class LocalServer: NSObject {
     }
 
     private func signChallenge(_ payload: String) -> String {
-        var data: Data?
+        var data: Data
         if JVHDConfig.challengeEncoding == "base64" {
-            data = JVHDCrypto.decodeBase64Loose(payload)
+            // BẮT BUỘC dùng bộ giải mã tương thích Node: `Buffer.from(x,'base64')`
+            // không bao giờ lỗi, nên `e0()` của Android/Windows luôn có chữ ký.
+            // `Data(base64Encoded:)` trả nil với chuỗi rỗng/lạ -> e0() rỗng ->
+            // app.js báo "Thiết bị không hỗ trợ xác thực" và chặn đăng nhập.
+            data = JVHDCrypto.decodeBase64NodeCompatible(payload)
         } else if JVHDConfig.challengeEncoding == "hex" {
-            data = Data(hexString: payload)
+            data = Data(hexString: payload) ?? Data()
         } else {
             data = Data(payload.utf8)
         }
-        guard let message = data else { return "" }
-        return DeviceKey.shared.signBase64(message: message)
+        return DeviceKey.shared.signBase64(message: data)
     }
 
     private func environmentJSON() -> String {
@@ -531,7 +542,10 @@ final class LocalServer: NSObject {
             "concat": JVHDConfig.concat,
             "authServer": JVHDConfig.authServer,
             "device": UIDevice.current.model,
-            "system": UIDevice.current.systemVersion
+            "system": UIDevice.current.systemVersion,
+            // Chẩn đoán khoá thiết bị: cho biết d0()/e0() đang dùng tầng nào và
+            // tầng nào đã thất bại (Secure Enclave / Keychain / CryptoKit).
+            "deviceKey": DeviceKey.shared.diagnostics
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]),
               let text = String(data: data, encoding: .utf8) else { return "{}" }
