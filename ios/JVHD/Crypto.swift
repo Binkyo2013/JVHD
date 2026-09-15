@@ -76,35 +76,28 @@ enum JVHDCrypto {
     /// -> `app.js` coi là "thiết bị không hỗ trợ xác thực" và chặn đăng nhập,
     /// còn Android vẫn ký và đăng nhập bình thường.
     static func decodeBase64NodeCompatible(_ text: String) -> Data {
-        var sextet = [UInt8]()
-        sextet.reserveCapacity(text.utf8.count)
+        var sextets = [UInt8]()
+        sextets.reserveCapacity(text.utf8.count)
         for byte in text.utf8 {
             // Dừng tại dấu '=' đầu tiên, giống hệt Node.
             if byte == UInt8(ascii: "=") { break }
-            if let value = base64Values[byte] { sextet.append(value) }
+            if let value = base64Values[byte] { sextets.append(value) }
         }
-        // Node ghép từng nhóm 4 sextet; nhóm dư 1 ký tự bị vứt đi.
-        let usable = (sextet.count / 4) * 4 + (sextet.count % 4 == 3 ? 3 : (sextet.count % 4 == 2 ? 2 : 0))
-        var out = Data()
-        out.reserveCapacity(usable * 3 / 4)
-        var index = 0
-        while index + 4 <= usable {
-            let a = sextet[index], b = sextet[index + 1], c = sextet[index + 2], d = sextet[index + 3]
-            out.append((a << 2) | (b >> 4))
-            out.append((b << 4) | (c >> 2))
-            out.append((c << 6) | d)
-            index += 4
-        }
-        // Nhóm dư: 3 sextet = 18 bit -> 2 byte · 2 sextet = 12 bit -> 1 byte.
-        let rest = usable - index
-        if rest == 3 {
-            let a = sextet[index], b = sextet[index + 1], c = sextet[index + 2]
-            out.append((a << 2) | (b >> 4))
-            out.append((b << 4) | (c >> 2))
-        } else if rest == 2 {
-            let a = sextet[index], b = sextet[index + 1]
-            out.append((a << 2) | (b >> 4))
-            out.append((b << 4))
+        // Node sinh ra đúng floor(số_sextet * 6 / 8) byte:
+        //   1 sextet -> 0 byte · 2 -> 1 byte · 3 -> 2 byte · 4 -> 3 byte.
+        let byteCount = (sextets.count * 6) / 8
+        var out = Data(count: byteCount)
+        var bitBuffer = 0
+        var bitsInBuffer = 0
+        var written = 0
+        for sextet in sextets {
+            bitBuffer = (bitBuffer << 6) | Int(sextet)
+            bitsInBuffer += 6
+            while bitsInBuffer >= 8 && written < byteCount {
+                bitsInBuffer -= 8
+                out[written] = UInt8((bitBuffer >> bitsInBuffer) & 0xff)
+                written += 1
+            }
         }
         return out
     }
