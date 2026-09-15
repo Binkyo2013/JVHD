@@ -13,6 +13,11 @@ name: Auth diagnostic probe
 
 on:
   workflow_dispatch:
+  # (tạm thời) workflow_dispatch chỉ chạy được khi file nằm trên nhánh mặc
+  # định, nên trong lúc chẩn đoán ta cho phép push từ nhánh làm việc.
+  push:
+    branches: ['arena/01a0a28b-jvhd']
+    paths: ['.github/workflows/auth-probe.yml', 'tools/auth_probe.js', 'tools/native_crypto_main.swift', 'tools/verify_swift_sig.js']
 
 permissions:
   contents: read
