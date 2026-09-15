@@ -138,16 +138,30 @@ WebView.
 > | iPhone thật, khoá trong Secure Enclave | X9.62 `r‖s` (sai) | `bad` / `denied` | “Phiên xác thực hết hạn, vui lòng thử lại” hoặc “Thiết bị không khớp thiết bị đã đăng ký” (+đếm vào khoá 3 phút) |
 > | Máy build macOS / Keychain bị chặn | `derRepresentation` của CryptoKit (đúng) | `ok` | đăng nhập bình thường |
 >
-> Đây chính là lý do `tools/native_crypto_main.swift` (check trong CI) **không**
-> phát hiện ra: trên runner macOS, Secure Enclave không tồn tại nên `DeviceKey`
-> luôn rơi xuống nhánh CryptoKit — nhánh vốn đã đúng. Nói cách khác: CI xanh,
-> iPhone vẫn không đăng nhập được.
+> Đây cũng là lý do `tools/native_crypto_main.swift` (check trong CI của PR trước)
+> **không** phát hiện ra: trên runner macOS, `DeviceKey` không bao giờ lấy được
+> khoá Secure Enclave (`errSecMissingEntitlement`) nên chữ ký sinh ra từ tầng
+> khác — tầng này tình cờ đã đúng định dạng. Nói cách khác: CI xanh, iPhone vẫn
+> không đăng nhập được. Muốn thấy lỗi này phải kiểm hàm chuyển đổi bằng fixture
+> (`tools/ios_crypto_check`), không thể chỉ “ký xong tự kiểm” trên máy build.
 >
-> Cách sửa: `JVHDCrypto.derEncodeRS()` đóng gói X9.62 → DER theo đúng quy tắc
-> INTEGER của ASN.1 (bỏ 0 đệm thừa, thêm `0x00` khi byte cao có bit dấu), và
-> `signBase64()` tôn trọng `sigFormat` (`der-*` / `raw*` / `-hex`) ở **cả ba**
-> tầng khoá. Định dạng được kiểm bằng fixture do OpenSSL sinh
-> (`test/der_fixtures.json`), không phải do code iOS tự sinh rồi tự nhận đúng.
+> Cách sửa: `JVHDCrypto.normalizedSignature()` gọi `derEncodeRS()` /
+> `derDecodeRS()` để đóng gói X9.62 → DER theo đúng quy tắc INTEGER của ASN.1
+> (bỏ 0 đệm thừa, thêm `0x00` khi byte cao có bit dấu), và `signBase64()` tôn
+> trọng `sigFormat` (`der-*` / `raw*` / `-hex`) ở **cả ba** tầng khoá.
+>
+> **Vì sao phải *nhận diện* chứ không bọc vô điều kiện:** bản thân
+> `SecKeyCreateSignature` không cho ra một định dạng duy nhất. Nhật ký CI cho thấy
+> khi `d0` chạy ở tầng `keychain` (máy build macOS) thì chữ ký đã là **DER sẵn,
+> 71 byte**, còn chữ ký của khoá Secure Enclave trên iPhone là **X9.62, 64 byte**.
+> Bọc chồng lên một blob đã là DER sẽ sinh ra `30 4a 02 23 30 44 …` — “DER lồng
+> DER” mà server không đọc được; đúng sự cố này đã xảy ra ở lượt build
+> `34918047184` và log nằm trong comment của PR #5. Nên `looksLikeDERSignature()`
+> phải kiểm cấu trúc `SEQUENCE{INTEGER,INTEGER}` dùng hết dữ liệu rồi mới quyết
+> định bọc hay giữ nguyên.
+>
+> Định dạng được kiểm bằng fixture do OpenSSL sinh (`test/der_fixtures.json`,
+> 46 mẫu), không phải do code iOS tự sinh rồi tự nhận đúng.
 
 Hai điểm phụ cũng sửa trong PR này:
 

@@ -294,15 +294,19 @@ final class DeviceKey {
                 NSLog("[JVHD][DeviceKey] ký thất bại: %@", describe(error))
                 return ""
             }
-            let x962 = signature as Data
-            guard wantDer else { return encodeSignature(x962, format: format) }
-            guard let der = JVHDCrypto.derEncodeRS(x962) else {
-                let reason = "chuyển X9.62 (\(x962.count) byte) -> DER thất bại"
+            let signed = signature as Data
+            // Apple KHÔNG trả về một định dạng duy nhất cho
+            // .ecdsaSignatureMessageX962SHA256: khoá Secure Enclave xuất X9.62
+            // (64 byte) nhưng khoá Keychain thông thường xuất DER sẵn.
+            // normalizedSignature() nhận diện cả hai, còn ép bọc một blob đã là
+            // DER sẽ tạo ra chữ ký rác mà server không đọc được.
+            guard let body = JVHDCrypto.normalizedSignature(signed, wantDer: wantDer) else {
+                let reason = "chữ ký \(signed.count) byte từ tầng khoá không phải X9.62 lẫn DER"
                 diagnostics["signError"] = reason
                 NSLog("[JVHD][DeviceKey] %@", reason)
                 return ""
             }
-            return encodeSignature(der, format: format)
+            return encodeSignature(body, format: format)
         case .cryptoKit(let key):
             do {
                 // `derRepresentation` đúng bằng chữ ký ASN.1 DER mà

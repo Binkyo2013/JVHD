@@ -135,12 +135,70 @@ enum JVHDCrypto {
         return [UInt8(0x80 | bytes.count)] + bytes
     }
 
+    /// `data` có phải một chữ ký ECDSA dạng ASN.1 DER hợp lệ hay không:
+    /// `SEQUENCE { INTEGER r, INTEGER s }` dùng **đúng hết** số byte.
+    /// Cần hàm này vì `SecKeyCreateSignature(.ecdsaSignatureMessageX962SHA256)`
+    /// không cho ra một định dạng duy nhất: khoá trong Secure Enclave trả
+    /// X9.62 (`r||s`, 64 byte), còn khoá Keychain thông thường (kể cả trên
+    /// máy build macOS) lại trả **DER sẵn** (68–72 byte).
+    static func looksLikeDERSignature(_ data: Data) -> Bool {
+        let bytes = [UInt8](data)
+        guard bytes.count > 6, bytes[0] == 0x30 else { return false }
+        var position = 1
+        var total = Int(bytes[position]); position += 1
+        if (total & 0x80) != 0 {
+            let countOfLength = total & 0x7f
+            guard countOfLength > 0, countOfLength <= 3, position + countOfLength <= bytes.count else { return false }
+            total = 0
+            for _ in 0..<countOfLength {
+                total = (total << 8) | Int(bytes[position]); position += 1
+            }
+        }
+        // SEQUENCE phải bọc vừa khít phần còn lại, không thừa không thiếu.
+        guard total >= 4, position + total == bytes.count else { return false }
+        let end = position + total
+        for _ in 0..<2 {
+            guard position < end, bytes[position] == 0x02 else { return false }
+            position += 1
+            guard position < end else { return false }
+            var length = Int(bytes[position]); position += 1
+            if (length & 0x80) != 0 {
+                let countOfLength = length & 0x7f
+                guard countOfLength > 0, countOfLength <= 3, position + countOfLength <= end else { return false }
+                length = 0
+                for _ in 0..<countOfLength {
+                    length = (length << 8) | Int(bytes[position]); position += 1
+                }
+            }
+            guard length >= 1, length <= 33, position + length <= end else { return false }
+            position += length
+        }
+        return position == end
+    }
+
+    /// Trả về chữ ký ĐÚNG định dạng mà máy chủ cần, bất kể tầng khoá xuất ra
+    /// X9.62 hay DER. Đây là chỗ BẢN iOS từng sai trên máy thật:
+    /// `SecKeyCreateSignature` chỉ xuất X9.62 ở nhánh Secure Enclave, còn máy
+    /// chủ và bản Android/Windows dùng DER — và ngược lại, ép bọc một blob đã
+    /// là DER sẵn sẽ tạo ra chữ ký rác.
+    static func normalizedSignature(_ signature: Data, wantDer: Bool) -> Data? {
+        // Chuỗi 64 byte được ưu tiên hiểu là `r||s` theo ANSI X9.62 (đúng tài
+        // liệu Apple cho ecdsaSignatureMessageX962SHA256); DER của P-256 luôn
+        // dài 68–72 byte nên không nhầm được.
+        let alreadyDer = signature.count != 64 && looksLikeDERSignature(signature)
+        if wantDer {
+            return alreadyDer ? signature : derEncodeRS(signature)
+        }
+        if alreadyDer { return derDecodeRS(signature) ?? signature }
+        return signature
+    }
+
     /// ANSI X9.62 (`r||s`, mỗi thành phần 32 byte với P-256) -> ASN.1 DER.
-    /// Đây là bước mà BẢN iOS còn thiếu trên máy thật: `SecKeyCreateSignature`
-    /// chỉ xuất X9.62, còn máy chủ và bản Android/Windows dùng DER.
     static func derEncodeRS(_ raw: Data) -> Data? {
         let bytes = [UInt8](raw)
         guard bytes.count >= 8, bytes.count % 2 == 0 else { return nil }
+        // Không bao giờ bọc chồng lên một DER có độ dài khác 64 (rác).
+        if bytes.count != 64, looksLikeDERSignature(raw) { return nil }
         let half = bytes.count / 2
         let body = derInteger(Array(bytes[0..<half])) + derInteger(Array(bytes[half..<bytes.count]))
         return Data([0x30] + derLength(body.count) + body)

@@ -127,6 +127,36 @@ enum IOSCryptoCheck {
             print("Base64: fixture không có mục 'base64' (bỏ qua)")
         }
 
+        // ------------------------------------------------- tự nhận diện định dạng
+        // `SecKeyCreateSignature` trả X9.62 ở nhánh Secure Enclave nhưng trả DER
+        // SẴN ở nhánh Keychain (68–72 byte). `normalizedSignature` phải:
+        //   · bọc r||s -> DER;  · để nguyên DER đã hợp lệ (KHÔNG bọc chồng);
+        //   · và bóc DER -> r||s khi cần dạng raw.
+        var normalizedProblems = 0
+        for item in signatures {
+            guard let raw = hexToData(item["raw"] as? String ?? ""),
+                  let der = hexToData(item["der"] as? String ?? "") else { continue }
+            if JVHDCrypto.normalizedSignature(raw, wantDer: true) != der {
+                normalizedProblems += 1
+                print("  LỆCH  normalizedSignature(r||s, wantDer) khác fixture")
+            }
+            if JVHDCrypto.normalizedSignature(der, wantDer: true) != der {
+                normalizedProblems += 1
+                print("  LỆCH  normalizedSignature(DER, wantDer) bị bọc chồng lên DER")
+            }
+            if JVHDCrypto.normalizedSignature(der, wantDer: false) != raw {
+                normalizedProblems += 1
+                print("  LỆCH  normalizedSignature(DER, wantRaw) không bóc ra r||s")
+            }
+            if JVHDCrypto.normalizedSignature(raw, wantDer: false) != raw {
+                normalizedProblems += 1
+                print("  LỆCH  normalizedSignature(r||s, wantRaw) làm thay đổi dữ liệu")
+            }
+        }
+        let normalizedVerdict = normalizedProblems == 0 ? "đúng cả hai chiều" : "CÓ LỆCH"
+        print("Tự nhận diện định dạng: \(signatures.count) mẫu — \(normalizedVerdict)")
+
+        problems += normalizedProblems
         if problems + base64Problems > 0 {
             print("[ios-crypto-check] THẤT BẠI: \(problems + base64Problems) mẫu không khớp chuẩn Node/OpenSSL")
             return 1
