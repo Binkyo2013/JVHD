@@ -119,12 +119,15 @@ jobs:
       - name: "Kiểm thuật toán iOS: derEncodeRS / base64 theo fixture OpenSSL"
         run: |
           set -eo pipefail
-          swiftc -O \
-            ios/JVHD/Config.swift \
-            ios/JVHD/Crypto.swift \
-            tools/ios_crypto_check/main.swift \
-            -o "$RUNNER_TEMP/ios_crypto_check"
-          "$RUNNER_TEMP/ios_crypto_check" test/der_fixtures.json
+          { swiftc -O \
+              ios/JVHD/Config.swift \
+              ios/JVHD/Crypto.swift \
+              tools/ios_crypto_check/main.swift \
+              -o "$RUNNER_TEMP/ios_crypto_check" \
+              && "$RUNNER_TEMP/ios_crypto_check" test/der_fixtures.json; } \
+            2>&1 | tee -a build.log
+          grep -q . build.log
+          ! grep -qE "error:|fatal error:" build.log
 
       - name: Đối chiếu mật mã iOS với chuẩn Android (d0/e0/c0)
         run: |
