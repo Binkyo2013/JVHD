@@ -59,10 +59,26 @@ jobs:
               0000000000000000000000000000000000000000000000000000000000000000 2>&1; } \
             | tee -a diag/auth-probe.txt
 
-      - name: '3) Biên dịch Config/Crypto/DeviceKey.swift + harness'
+      - name: '3a) Kiểm thử Node (bản Windows + luồng đăng nhập iOS)'
+        run: |
+          { echo; echo "### node test/node_test.js"; } >> diag/auth-probe.txt
+          node test/node_test.js 2>&1 | tail -5 | tee -a diag/auth-probe.txt
+          { echo; echo "### node test/ios_auth_test.js"; } >> diag/auth-probe.txt
+          node test/ios_auth_test.js 2>&1 | tail -8 | tee -a diag/auth-probe.txt
+
+      - name: '3b) Type-check TOÀN BỘ mã Swift của app'
         run: |
           set -e
-          { echo; echo "### swiftc"; } >> diag/auth-probe.txt
+          { echo; echo "### swiftc -typecheck (iphonesimulator)"; } >> diag/auth-probe.txt
+          xcrun -sdk iphonesimulator swiftc -typecheck \
+            -target arm64-apple-ios16.0-simulator \
+            ios/JVHD/*.swift 2>&1 | tee -a diag/auth-probe.txt || true
+          echo "type-check xong" | tee -a diag/auth-probe.txt
+
+      - name: '3c) Biên dịch Config/Crypto/DeviceKey.swift + harness'
+        run: |
+          set -e
+          { echo; echo "### swiftc harness"; } >> diag/auth-probe.txt
           swiftc -O \
             ios/JVHD/Config.swift \
             ios/JVHD/Crypto.swift \

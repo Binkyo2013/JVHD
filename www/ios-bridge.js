@@ -224,6 +224,22 @@
     }
 
     if (typeof window.AndroidBridge === "undefined") {
+        // Giá trị d0() lấy được từ native — nhớ lại để không phải gọi lại
+        // (mỗi lần gọi là một round-trip XHR đồng bộ).
+        var cachedPubKey = (PUBKEY && PUBKEY.indexOf("__") !== 0) ? PUBKEY : "";
+
+        // Gọi native kèm MỘT lần thử lại: XHR đồng bộ tới 127.0.0.1 có thể
+        // trượt tức thời (server bận phát media). Android/Windows gọi thẳng
+        // hàm native trong tiến trình nên không có khái niệm "trượt"; nếu iOS
+        // trả chuỗi rỗng thì app.js hiểu là "Thiết bị không hỗ trợ xác thực"
+        // và CHẶN đăng nhập — vì vậy tuyệt đối không được bỏ cuộc sớm.
+        function nativeWithRetry(path, payload) {
+            var value = nativeCall(path, payload);
+            if (value) return value;
+            log("nativeCall " + path + " rỗng, thử lại lần 2…");
+            return nativeCall(path, payload);
+        }
+
         window.AndroidBridge = {
             // Bọc URL nguồn qua proxy cục bộ (đồng bộ, không cần gọi native).
             proxyMedia: function (url, referer) { return buildProxyUrl(url, referer); },
@@ -235,15 +251,26 @@
                     var digest = sha256Hex(text);
                     if (/^[0-9a-f]{64}$/.test(digest)) return digest;
                 } catch (e) {}
-                return nativeCall("/__native/c0?n=" + encodeURIComponent(String(name == null ? "" : name)), "");
+                var fallbackDigest = nativeWithRetry(
+                    "/__native/c0?n=" + encodeURIComponent(String(name == null ? "" : name)), "");
+                return /^[0-9a-f]{64}$/.test(fallbackDigest) ? fallbackDigest : "";
             },
-            // Khoá công khai thiết bị (Secure Enclave) — Swift chèn sẵn.
+            // Khoá công khai thiết bị (Secure Enclave) — Swift chèn sẵn, nếu
+            // trống thì hỏi native (Swift tự dự phòng Keychain/CryptoKit nên
+            // luôn có khoá, đúng như ensureDeviceKey() của bản Windows).
             d0: function () {
-                if (PUBKEY && PUBKEY.indexOf("__") !== 0) return PUBKEY;
-                return nativeCall("/__native/d0", "");
+                if (cachedPubKey) return cachedPubKey;
+                cachedPubKey = String(nativeWithRetry("/__native/d0", "") || "");
+                if (!cachedPubKey) log("d0() rỗng — xem /__native/env để biết khoá thiết bị lỗi ở tầng nào");
+                return cachedPubKey;
             },
             // Chữ ký ECDSA — bắt buộc phải qua native (khoá không rời thiết bị).
-            e0: function (data) { return nativeCall("/__native/e0", String(data == null ? "" : data)); },
+            // Bản Node/Windows ký được CẢ chuỗi rỗng (Buffer.from('','base64')
+            // không lỗi), nên iOS cũng phải luôn trả về chuỗi, không bao giờ
+            // trả về kiểu khác.
+            e0: function (data) {
+                return String(nativeWithRetry("/__native/e0", String(data == null ? "" : data)) || "");
+            },
             // iOS không cho phép app tự thoát -> đưa app về nền (hành vi chuẩn iOS).
             exitApp: function () { JVHDiOS.exitApp(); return "1"; },
             // Các hàm phụ của tizen_shim (không dùng trên iOS).
@@ -253,6 +280,32 @@
             clearCookies: function () { return "1"; }
         };
     }
+
+    /* ------------------------------------------------------------------ *
+     * 4b. Chẩn đoán: đọc /__native/env để biết khoá thiết bị đang ở tầng nào
+     *     (Secure Enclave / Keychain / CryptoKit) và tầng nào đã thất bại.
+     *     Gọi từ console Safari: __jvhdNativeDiagnostics()
+     * ------------------------------------------------------------------ */
+    window.__jvhdNativeDiagnostics = function () {
+        var out = {
+            base: BASE,
+            injectedPubKey: (PUBKEY && PUBKEY.indexOf("__") !== 0) ? "(đã chèn)" : "(TRỐNG)",
+            bridge: !!window.AndroidBridge,
+            d0: (window.AndroidBridge && window.AndroidBridge.d0) ? window.AndroidBridge.d0() : "(không có)",
+            e0EmptyInput: (window.AndroidBridge && window.AndroidBridge.e0) ? window.AndroidBridge.e0("") : "(không có)",
+            lastError: lastError
+        };
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", (BASE || window.location.origin) + "/__native/env", false);
+            xhr.send(null);
+            if (xhr.status >= 200 && xhr.status < 300) out.env = JSON.parse(xhr.responseText);
+        } catch (e) { out.envError = String(e); }
+        out.e0EmptyInputLength = String(out.e0EmptyInput || "").length;
+        delete out.e0EmptyInput;
+        try { console.log("[JVHD-iOS][diag]", JSON.stringify(out)); } catch (e2) {}
+        return out;
+    };
 
     /* ------------------------------------------------------------------ *
      * 5. Chống lỗi CORS: mọi XHR chéo nguồn tự đi qua proxy cục bộ.

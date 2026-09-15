@@ -9,13 +9,14 @@
  * `/__native/e0`:
  *
  *   d0()      = DeviceKey.shared.publicKeyBase64()
- *   e0(base64)= DeviceKey.shared.signBase64(JVHDCrypto.decodeBase64Loose(x))
+ *   e0(base64)= DeviceKey.shared.signBase64(JVHDCrypto.decodeBase64NodeCompatible(x))
  *
  * Kết quả in ra dạng JSON một dòng (prefix `SWIFT_RESULT `) để bước Node
  * `tools/verify_swift_sig.js` kiểm chứng chữ ký bằng `crypto` của Node —
  * tức là kiểm chứng bằng CHÍNH công cụ mà bản Android/Windows dùng.
  */
 
+import CryptoKit
 import Foundation
 import Security
 
@@ -23,16 +24,15 @@ struct NativeCryptoProbe {
 
     /// Bản sao đúng nguyên văn `LocalServer.swift:signChallenge(_:)`.
     static func signChallenge(_ payload: String) -> String {
-        var data: Data?
+        var data: Data
         if JVHDConfig.challengeEncoding == "base64" {
-            data = JVHDCrypto.decodeBase64Loose(payload)
+            data = JVHDCrypto.decodeBase64NodeCompatible(payload)
         } else if JVHDConfig.challengeEncoding == "hex" {
-            data = Data(hexString: payload)
+            data = Data(hexString: payload) ?? Data()
         } else {
             data = Data(payload.utf8)
         }
-        guard let message = data else { return "" }
-        return DeviceKey.shared.signBase64(message: message)
+        return DeviceKey.shared.signBase64(message: data)
     }
 
     static func run() -> Int {
@@ -55,6 +55,9 @@ struct NativeCryptoProbe {
         // c0() phải khớp test vector jsonbin (Admin2).
         report["c0_Admin2"] = JVHDCrypto.c0("Admin2")
 
+        // Khoá đang nằm ở tầng nào + các tầng đã thất bại.
+        report["deviceKeyDiagnostics"] = DeviceKey.shared.diagnostics
+
         // --- e0(): ký challenge ---------------------------------------------
         let challengeBytes = Data((0..<32).map { UInt8($0) })
         let challengeB64 = challengeBytes.base64EncodedString()
@@ -70,52 +73,79 @@ struct NativeCryptoProbe {
         }
 
         // Tự kiểm chứng ngay trong Swift (khoá công khai + chữ ký vừa tạo).
-        if let key = DeviceKey.shared.privateKey(),
-           let pubKey = SecKeyCopyPublicKey(key),
-           let sigData = Data(base64Encoded: sig) {
-            var error: Unmanaged<CFError>?
-            report["swiftVerify"] = SecKeyVerifySignature(
-                pubKey, .ecdsaSignatureMessageX962SHA256, challengeBytes as CFData, sigData as CFData, &error)
+        if let sigData = Data(base64Encoded: sig) {
+            report["swiftVerify"] = verifyInSwift(challenge: challengeBytes, signature: sigData)
         } else {
             report["swiftVerify"] = false
         }
 
-        // --- Các định dạng challenge khác mà server CÓ THỂ gửi --------------
-        // Node dùng Buffer.from(x,'base64') rất dễ tính; Swift trả rỗng nếu
-        // không decode được -> e0 rỗng -> app.js báo "Thiết bị không hỗ trợ
-        // xác thực". Bảng này phơi bày đúng khác biệt đó.
-        var leniency: [String: Any] = [:]
-        let samples: [(String, String)] = [
-            ("base64 chuẩn", "aGVsbG8td29ybGQ="),
-            ("base64 thiếu đệm '='", "aGVsbG8td29ybGQ"),
-            ("base64url", "aGVsbG8td29ybGQ_"),
-            ("hex 64 ký tự", String(repeating: "ab", count: 32)),
-            ("chuỗi ngẫu nhiên thường", "n8Kd2-sX91_qW"),
-            ("chuỗi rỗng", "")
+        // --- ĐIỂM MẤU CHỐT CỦA LỖI iOS -------------------------------------
+        // `e0()` của bản Node/Windows ký được CẢ payload RỖNG (Buffer.from('',
+        // 'base64') không bao giờ lỗi). iOS trước đây trả về "" -> app.js báo
+        // "Thiết bị không hỗ trợ xác thực". Phải luôn có chữ ký.
+        let emptySig = signChallenge("")
+        report["sigForEmptyInput"] = emptySig
+        report["sigForEmptyInput_isDER"] = (Data(base64Encoded: emptySig)?.first ?? 0) == 0x30
+        report["swiftVerifyEmpty"] = verifyInSwift(challenge: Data(),
+                                                   signature: Data(base64Encoded: emptySig) ?? Data())
+
+        // --- Bảng đối chiếu bộ giải mã base64 với Node ---------------------
+        // Node dùng Buffer.from(x,'base64') rất dễ tính; Swift phải cho ra
+        // ĐÚNG TỪNG BYTE như vậy, nếu không chữ ký của iOS sẽ khác Android.
+        let samples = [
+            "aGVsbG8td29ybGQ=",
+            "aGVsbG8td29ybGQ",
+            "aGVsbG8td29ybGQ_",
+            "n8Kd2-sX91_qW",
+            String(repeating: "ab", count: 32),
+            "",
+            "!!!",
+            "a",
+            "ab",
+            "abc",
+            "abcd",
+            "a=b=c",
+            " A G V s b G 8 ",
+            "QUJDRA==QQ",
+            "Eqa8elAwNrjCZ8dAR5UTvU0fbJ9q7gFaiSXckN99CLc="
         ]
-        for (label, sample) in samples {
-            let decoded = JVHDCrypto.decodeBase64Loose(sample)
-            let signed = signChallenge(sample)
-            leniency[label] = [
-                "sample": sample,
-                "swiftDecodedBytes": decoded?.count ?? -1,
-                "swiftSigEmpty": signed.isEmpty,
-                "nodeDecodedBytes": nodeBase64Len(sample)
-            ]
+        var table: [String: String] = [:]
+        for sample in samples {
+            table[sample] = JVHDCrypto.decodeBase64NodeCompatible(sample)
+                .map { String(format: "%02x", $0) }.joined()
         }
-        report["leniency"] = leniency
+        report["nodeCompatHex"] = table
+
+        // Mỗi mẫu cũng phải ký ra được chữ ký (không rỗng) như Node.
+        var signResults: [String: Bool] = [:]
+        for sample in samples { signResults[sample] = !signChallenge(sample).isEmpty }
+        report["signNotEmpty"] = signResults
 
         let json = (try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys])) ?? Data()
         print("SWIFT_RESULT " + (String(data: json, encoding: .utf8) ?? "{}"))
         return 0
     }
 
-    /// Đếm số byte mà `Buffer.from(x,'base64')` của Node sẽ tạo ra.
-    /// Node bỏ qua mọi ký tự ngoài bảng base64 và không đòi đệm '='.
+    /// Verify bằng khoá công khai của chính DeviceKey (mọi tầng backend).
+    private static func verifyInSwift(challenge: Data, signature: Data) -> Bool {
+        guard !signature.isEmpty else { return false }
+        let pubB64 = DeviceKey.shared.publicKeyBase64()
+        guard let raw = Data(base64Encoded: pubB64), raw.count == 65 else { return false }
+        if let key = DeviceKey.shared.privateKey(), let pubKey = SecKeyCopyPublicKey(key) {
+            var error: Unmanaged<CFError>?
+            return SecKeyVerifySignature(pubKey, .ecdsaSignatureMessageX962SHA256,
+                                         challenge as CFData, signature as CFData, &error)
+        }
+        // Tầng CryptoKit: dựng lại khoá công khai từ 65 byte raw.
+        guard let pubKey = try? P256.Signing.PublicKey(rawRepresentation: raw) else { return false }
+        guard let ecdsa = try? P256.Signing.ECDSASignature(derRepresentation: signature) else { return false }
+        return pubKey.isValidSignature(ecdsa, for: challenge)
+    }
+
+    /// Đếm số byte mà `Buffer.from(x,'base64')` của Node sẽ tạo ra (tham khảo).
     static func nodeBase64Len(_ text: String) -> Int {
-        let table = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+        let table = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/-_")
         let chars = text.filter { table.contains($0) }
-        // Node giải mã theo từng nhóm 4 ký tự; nhóm cuối 1 ký tự bị bỏ.
         let groups = chars.count / 4
         let rest = chars.count % 4
         var bytes = groups * 3
