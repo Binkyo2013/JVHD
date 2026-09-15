@@ -159,7 +159,15 @@
             xhr.setRequestHeader("Content-Type", "text/plain;charset=utf-8");
             xhr.send(payload == null ? "" : payload);
             if (xhr.status >= 200 && xhr.status < 400) return xhr.responseText || "";
-            lastError = "nativeCall " + path + " -> HTTP " + xhr.status;
+            // Khi tầng khoá hỏng, Swift trả "ERR: <lý do>" trong body. Giữ lại để
+            // câu lỗi trên màn hình nói được HỎNG Ở ĐÂU, không chỉ "thiết bị không
+            // hỗ trợ" chung chung như trước.
+            var reason = String(xhr.responseText || "");
+            if (reason.indexOf("ERR:") === 0) {
+                lastError = "nativeCall " + path + " -> " + reason.slice(4).replace(/^\s+/, "");
+            } else {
+                lastError = "nativeCall " + path + " -> HTTP " + xhr.status;
+            }
         } catch (e) {
             lastError = "nativeCall " + path + " -> " + e;
         }
@@ -181,8 +189,22 @@
     }
 
     var JVHDiOS = {
-        version: "1.0",
+        version: "1.1",
         sha256Hex: sha256Hex,
+        /// Tóm tắt trạng thái cầu nối xác thực cho câu lỗi trên màn hình.
+        /// Không phát sinh request mạng: chỉ đọc trạng thái đã biết.
+        authStatus: function () {
+            var parts = [];
+            parts.push("c0=" + (typeof sha256Hex === "function" ? "ok" : "khong"));
+            parts.push("pubkey=" + (cachedPubKey ? "ok" : "trống"));
+            parts.push("base=" + (BASE ? "ok" : "trống"));
+            if (lastError) {
+                // Bỏ phần "nativeCall /__native/xxx -> " để lại đúng lý do tầng khoá.
+                var reason = String(lastError).replace(/^nativeCall\s+\S+\s+->\s+/, "");
+                parts.push("lý-do=" + reason.slice(0, 160));
+            }
+            return parts.join(" · ");
+        },
         openNativePlayer: function (url, title, referer) {
             var target = absoluteUrl(url);
             if (!isHttp(target)) { log("openNativePlayer: URL không hợp lệ"); return false; }
@@ -224,8 +246,8 @@
     }
 
     if (typeof window.AndroidBridge === "undefined") {
-        // Giá trị d0() lấy được từ native — nhớ lại để không phải gọi lại
-        // (mỗi lần gọi là một round-trip XHR đồng bộ).
+        // Ảnh chụp khoá gần nhất lấy được từ native (khởi đầu bằng giá trị Swift
+        // chèn vào ios-bridge.js). Chỉ dùng làm DỰ PHÒNG khi native không trả lời.
         var cachedPubKey = (PUBKEY && PUBKEY.indexOf("__") !== 0) ? PUBKEY : "";
 
         // Gọi native kèm MỘT lần thử lại: XHR đồng bộ tới 127.0.0.1 có thể
@@ -255,14 +277,29 @@
                     "/__native/c0?n=" + encodeURIComponent(String(name == null ? "" : name)), "");
                 return /^[0-9a-f]{64}$/.test(fallbackDigest) ? fallbackDigest : "";
             },
-            // Khoá công khai thiết bị (Secure Enclave) — Swift chèn sẵn, nếu
-            // trống thì hỏi native (Swift tự dự phòng Keychain/CryptoKit nên
-            // luôn có khoá, đúng như ensureDeviceKey() của bản Windows).
+            // Khoá công khai thiết bị. LUÔN hỏi native trước khi dùng bản chèn sẵn:
+            // khoá DÙNG ĐỂ KÝ nằm trong Secure Enclave/Keychain/tệp, còn
+            // `__JVHD_PUBKEY__` chỉ là ảnh chụp lúc máy chủ cục bộ phục vụ
+            // ios-bridge.js. Hai thứ có thể lệch nhau (khoá được tạo SAU lần phục vụ
+            // ở lần mở đầu tiên, hoặc được tạo lại sau khi cài đè app / ký lại bằng
+            // chứng thư khác -> đổi keychain access group). Nếu gởi khoá cũ lên server
+            // trong khi chữ ký sinh từ khoá mới, server lưu binding KHÔNG verify được
+            // nữa -> các lần sau báo "Thiết bị không khớp thiết bị đã đăng ký" và
+            // người dùng bị khoá 3 phút. Một round-trip 127.0.0.1 là giá rẻ để loại
+            // hẳn lớp lỗi này; native không trả lời thì mới dùng ảnh chụp.
             d0: function () {
+                var fromNative = String(nativeWithRetry("/__native/d0", "") || "");
+                if (/^[A-Za-z0-9+/=]{40,}$/.test(fromNative)) {
+                    if (cachedPubKey && cachedPubKey !== fromNative) {
+                        log("d0(): khoá native khác ảnh chụp lúc phục vụ trang — dùng bản native");
+                    }
+                    cachedPubKey = fromNative;
+                    return cachedPubKey;
+                }
                 if (cachedPubKey) return cachedPubKey;
-                cachedPubKey = String(nativeWithRetry("/__native/d0", "") || "");
-                if (!cachedPubKey) log("d0() rỗng — xem /__native/env để biết khoá thiết bị lỗi ở tầng nào");
-                return cachedPubKey;
+                if (PUBKEY && PUBKEY.indexOf("__") !== 0) return PUBKEY;
+                log("d0() rỗng — xem __jvhdNativeDiagnostics()/__native/env để biết khoá lỗi ở tầng nào");
+                return "";
             },
             // Chữ ký ECDSA — bắt buộc phải qua native (khoá không rời thiết bị).
             // Bản Node/Windows ký được CẢ chuỗi rỗng (Buffer.from('','base64')

@@ -107,10 +107,33 @@ jobs:
           set -eo pipefail
           node test/node_test.js
           node test/ios_auth_test.js
+          # Luồng end-to-end bind/verify kiểm bằng QUY TẮC THẬT của máy chủ xác thực
+          # (pubFromRaw/verifySig/newNonce) — bắt được cả lỗi định dạng chữ ký lẫn
+          # lỗi ghi đè dữ liệu JSONBin.
+          node test/ios_auth_flow_test.js
+
+      # Thuật toán ĐÓNG GÓI chữ ký (X9.62 -> ASN.1 DER) và giải mã base64 kiểu Node
+      # là thứ không thể kiểm bằng JS và cũng không thể kiểm bằng probe trên runner
+      # macOS (ở đó Secure Enclave không khả dụng nên DeviceKey rơi xuống nhánh
+      # CryptoKit). Vì vậy kiểm trực tiếp hàm Swift bằng fixture do Node/OpenSSL sinh.
+      - name: "Kiểm thuật toán iOS: derEncodeRS / base64 theo fixture OpenSSL"
+        run: |
+          set -eo pipefail
+          # Toàn bộ output (kể cả lỗi biên dịch) được ghi thêm vào build.log để
+          # bước "Đăng lỗi build lên PR" đưa nguyên văn vào PR — log của runner
+          # GitHub không phải lúc nào cũng tải được từ ngoài.
+          exec > >(tee -a build.log) 2>&1
+          swiftc -O \
+            ios/JVHD/Config.swift \
+            ios/JVHD/Crypto.swift \
+            tools/ios_crypto_check/main.swift \
+            -o "$RUNNER_TEMP/ios_crypto_check"
+          "$RUNNER_TEMP/ios_crypto_check" test/der_fixtures.json
 
       - name: Đối chiếu mật mã iOS với chuẩn Android (d0/e0/c0)
         run: |
           set -eo pipefail
+          exec > >(tee -a build.log) 2>&1
           swiftc -O \
             ios/JVHD/Config.swift \
             ios/JVHD/Crypto.swift \

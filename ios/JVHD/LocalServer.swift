@@ -408,10 +408,11 @@ final class LocalServer: NSObject {
                 NSLog("[JVHD][native] /__native/d0 RỖNG — chẩn đoán khoá: %@",
                       String(describing: DeviceKey.shared.diagnostics))
             }
-            let status = pub.isEmpty ? 500 : 200
-            connection.respond(status: status,
+            connection.respond(status: pub.isEmpty ? 500 : 200,
                                headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
-                               body: Data(pub.utf8),
+                               // Khi hỏng, thân trả về là "ERR: <lý do>" để câu lỗi
+                               // trên màn hình nói được tầng nào đã chết.
+                               body: pub.isEmpty ? keyFailureBody() : Data(pub.utf8),
                                keepAlive: request.isKeepAlive)
         case "/__native/e0":
             let payload = request.body.isEmpty ? (request.query["d"] ?? "") : (String(data: request.body, encoding: .utf8) ?? "")
@@ -420,10 +421,9 @@ final class LocalServer: NSObject {
                 NSLog("[JVHD][native] /__native/e0 RỖNG — chẩn đoán khoá: %@",
                       String(describing: DeviceKey.shared.diagnostics))
             }
-            let status = signature.isEmpty ? 500 : 200
-            connection.respond(status: status,
+            connection.respond(status: signature.isEmpty ? 500 : 200,
                                headers: corsHeaders(["Content-Type": "text/plain; charset=utf-8"]),
-                               body: Data(signature.utf8),
+                               body: signature.isEmpty ? keyFailureBody() : Data(signature.utf8),
                                keepAlive: request.isKeepAlive)
         case "/__native/env":
             let env = environmentJSON()
@@ -516,6 +516,23 @@ final class LocalServer: NSObject {
                                body: data ?? Data(),
                                keepAlive: keepAlive)
         }.resume()
+    }
+
+    /// "ERR: <tóm tắt chẩn đoán khoá>" — chỉ dùng cho đáp ứng lỗi của
+    /// `/__native/d0` và `/__native/e0`. Trước đây hai kênh này trả body rỗng,
+    /// lý do chỉ có trong NSLog, nên người dùng iPhone chỉ thấy đúng câu
+    /// "Thiết bị không hỗ trợ xác thực" mà không ai biết hỏng ở Secure Enclave,
+    /// Keychain hay tệp khoá. `ios-bridge.js` bóc chuỗi này đưa vào câu lỗi.
+    private func keyFailureBody() -> Data {
+        let info = DeviceKey.shared.diagnostics
+        var parts: [String] = []
+        if let value = info["activeBackend"] as? String { parts.append("backend=" + value) }
+        if let value = info["loadedFrom"] as? String { parts.append("lanGanNhat=" + value) }
+        if let value = info["loadKeychainStatus"] as? Int { parts.append("keychain=OSStatus\(value)") }
+        if let value = info["publicKeyError"] as? String { parts.append("d0=" + value) }
+        if let value = info["signError"] as? String { parts.append("e0=" + value) }
+        if parts.isEmpty { parts.append("không rõ (xem /__native/env)") }
+        return Data(("ERR: " + parts.joined(separator: " · ")).utf8)
     }
 
     private func signChallenge(_ payload: String) -> String {

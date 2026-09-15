@@ -123,14 +123,83 @@ WebView.
 > mở Safari → Web Inspector → console → `__jvhdNativeDiagnostics()`, hoặc
 > `http://127.0.0.1:<cổng>/__native/env` (mục `deviceKey`).
 
+> **Lỗi thứ ba của cùng triệu chứng — CHỈ xảy ra trên máy thật (PR này sửa):**
+> hai mục trên giải quyết việc *không có khoá* và *base64 lệch Node*, nhưng
+> `Config.swift` còn hứa `sigFormat = "der-b64"` mà `DeviceKey.signBase64()`
+> không giữ lời ở nhánh **Secure Enclave/Keychain**:
+> `SecKeyCreateSignature(.ecdsaSignatureMessageX962SHA256)` trả chữ ký dạng
+> **ANSI X9.62** (`r‖s`, 64 byte) và code cũ `return (signature as Data)
+> .base64EncodedString()` — gửi nguyên trạng lên server. Máy chủ kiểm bằng
+> `crypto.createVerify("SHA256")…verify(key, sig)` (chỉ đọc **ASN.1 DER**) nên
+> `verifySig()` luôn `false`:
+>
+> | Tình huống máy | Chữ ký iOS gửi lên | Server trả | Câu lỗi trên màn hình |
+> |---|---|---|---|
+> | iPhone thật, khoá trong Secure Enclave | X9.62 `r‖s` (sai) | `bad` / `denied` | “Phiên xác thực hết hạn, vui lòng thử lại” hoặc “Thiết bị không khớp thiết bị đã đăng ký” (+đếm vào khoá 3 phút) |
+> | Máy build macOS / Keychain bị chặn | `derRepresentation` của CryptoKit (đúng) | `ok` | đăng nhập bình thường |
+>
+> Đây cũng là lý do `tools/native_crypto_main.swift` (check trong CI của PR trước)
+> **không** phát hiện ra: trên runner macOS, `DeviceKey` không bao giờ lấy được
+> khoá Secure Enclave (`errSecMissingEntitlement`) nên chữ ký sinh ra từ tầng
+> khác — tầng này tình cờ đã đúng định dạng. Nói cách khác: CI xanh, iPhone vẫn
+> không đăng nhập được. Muốn thấy lỗi này phải kiểm hàm chuyển đổi bằng fixture
+> (`tools/ios_crypto_check`), không thể chỉ “ký xong tự kiểm” trên máy build.
+>
+> Cách sửa: `JVHDCrypto.normalizedSignature()` gọi `derEncodeRS()` /
+> `derDecodeRS()` để đóng gói X9.62 → DER theo đúng quy tắc INTEGER của ASN.1
+> (bỏ 0 đệm thừa, thêm `0x00` khi byte cao có bit dấu), và `signBase64()` tôn
+> trọng `sigFormat` (`der-*` / `raw*` / `-hex`) ở **cả ba** tầng khoá.
+>
+> **Vì sao phải *nhận diện* chứ không bọc vô điều kiện:** bản thân
+> `SecKeyCreateSignature` không cho ra một định dạng duy nhất. Nhật ký CI cho thấy
+> khi `d0` chạy ở tầng `keychain` (máy build macOS) thì chữ ký đã là **DER sẵn,
+> 71 byte**, còn chữ ký của khoá Secure Enclave trên iPhone là **X9.62, 64 byte**.
+> Bọc chồng lên một blob đã là DER sẽ sinh ra `30 4a 02 23 30 44 …` — “DER lồng
+> DER” mà server không đọc được; đúng sự cố này đã xảy ra ở lượt build
+> `34918047184` và log nằm trong comment của PR #5. Nên `looksLikeDERSignature()`
+> phải kiểm cấu trúc `SEQUENCE{INTEGER,INTEGER}` dùng hết dữ liệu rồi mới quyết
+> định bọc hay giữ nguyên.
+>
+> Định dạng được kiểm bằng fixture do OpenSSL sinh (`test/der_fixtures.json`,
+> 46 mẫu), không phải do code iOS tự sinh rồi tự nhận đúng.
+
+Hai điểm phụ cũng sửa trong PR này:
+
+* **`d0()` luôn hỏi native trước.** Giá trị `__JVHD_PUBKEY__` Swift chèn vào
+  `ios-bridge.js` chỉ là ảnh chụp lúc phục vụ trang; nếu khoá được tạo muộn hơn
+  (lần mở đầu tiên) hoặc được tạo lại sau khi cài đè/ký lại app, ảnh chụp đó lệch
+  với khoá thật dùng để ký → server lưu một binding không bao giờ verify được.
+  Giờ native là nguồn chính thức, ảnh chụp chỉ còn là dự phòng.
+* **Lý do hỏng xuất hiện ngay trên màn hình.** `/__native/d0` và `/__native/e0`
+  khi thất bại trả body `ERR: backend=… · keychain=OSStatus -34018 · d0=…`
+  (trước đây body rỗng, lý do chỉ nằm trong NSLog), `ios-bridge.js` bóc chuỗi đó
+  và `app.js` — **chỉ trên iOS**, chặn sau cờ `window.__JVHD_IOS__` — nối vào câu
+  lỗi: *“Thiết bị không hỗ trợ xác thực, không thể tiếp tục — iOS: c0=ok ·
+  pubkey=ok · base=ok · lý-do=…”*. Android/Windows/Tizen giữ nguyên 100% câu chữ.
+
 ### Kiểm thử
 
 ```bash
-node test/node_test.js       # bản Windows: crypto + local server + proxy HLS
-node test/ios_auth_test.js   # bản iOS: nạp THẬT www/ios-bridge.js rồi chạy
-                             # đúng luồng POST /auth/start → e0 → /auth/verify
-                             # và cả nhánh /auth/bind của thiết bị MỚI
+node test/node_test.js            # bản Windows: crypto + local server + proxy HLS
+node test/ios_auth_test.js        # bản iOS: nạp THẬT www/ios-bridge.js rồi chạy
+                                  # đúng luồng POST /auth/start → e0 → /auth/verify
+                                  # và cả nhánh /auth/bind của thiết bị MỚI
+node test/ios_auth_flow_test.js   # CẢ LUỒNG bằng quy tắc THẬT của máy chủ xác thực
+node test/gen_der_fixtures.js     # sinh lại mẫu DER/base64 chuẩn OpenSSL (khi cần)
 ```
+
+`test/ios_auth_flow_test.js` chép nguyên văn `pubFromRaw` / `verifySig` /
+`newNonce` / `takeNonce` / `handleStart|Bind|Verify` của máy chủ xác thực
+(`hkrmta-code/jvhd-auth`, commit `d61e85787`) rồi chạy `www/ios-bridge.js` **thật**
+qua từng nhánh, nên nó khẳng định được những điều mà check “mô phỏng” không thấy:
+
+| Kịch bản | Điều phải đúng |
+|---|---|
+| Thiết bị iOS mới | `start → bind → ok`; `k` đúng 65 byte `0x04‖X‖Y`; server ghi `{k, at}` và **chỉ 1** bản ghi |
+| Mở lại lần sau | `start → challenge → verify → ok`, **không** ghi thêm gì |
+| Thiết bị thứ hai cùng tài khoản | vẫn `denied`, binding cũ **không bị đè** |
+| Mô phỏng bản cũ (X9.62 / Keychain hỏng / `e0('')`) | tái hiện đúng từng câu lỗi, và **không** tạo bản ghi rác |
+| JSONBin | **không** có request nào tới `api.jsonbin.io` từ cầu nối iOS; iOS chỉ dùng `/auth/start`, `/auth/bind`, `/auth/verify` |
 
 `ios_auth_test.js` dựng lại môi trường WKWebView (stub `XMLHttpRequest`) cùng
 bảng định tuyến của `LocalServer.swift`, rồi soi chính xác method/body/

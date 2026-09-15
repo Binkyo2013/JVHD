@@ -28,6 +28,15 @@ gh run download <run-id> -n JVHD-unsigned-ipa   # (cách cũ, cần máy tính +
 Chi tiết kiến trúc, cách ký/cài lên iPhone và các giới hạn:
 **[ios/README.md](ios/README.md)**.
 
+> **Gặp lỗi đăng nhập trên iOS?** Nếu màn hình báo
+> *“Thiết bị không hỗ trợ xác thực, không thể tiếp tục”* thì đó **không** phải
+> tài khoản sai — đó là lúc app không lấy được khoá chữ ký của máy. Ba nguyên nhân
+> phía iOS và cách sửa được ghi đầy đủ trong
+> [**`ios/README.md` → mục 3 “Cách giao tiếp web ↔ native”**](ios/README.md#3-cách-giao-tiếp-web--native).
+> Server xác thực và dữ liệu JSONBin **không** thay đổi. Muốn biết máy mình hỏng ở
+> tầng nào: mở `http://127.0.0.1:<cổng>/__native/env` (mục `deviceKey`) hoặc gọi
+> `__jvhdNativeDiagnostics()` trong console Safari.
+
 Tóm tắt:
 
 * Ứng dụng Swift thuần (iOS 16+) bọc `WKWebView` quanh `www/index.html`.
@@ -49,6 +58,7 @@ node tools/tool.js hash <username>   # tính SHA-256(name + salt)
 node tools/tool.js selfcheck         # tự kiểm tra khoá/chữ ký
 node test/node_test.js               # chạy bộ kiểm thử không cần giao diện
 node test/ios_auth_test.js           # kiểm thử luồng đăng nhập của bản iOS
+node test/ios_auth_flow_test.js      # cả luồng bind/verify, kiểm bằng quy tắc server thật
 ```
 
 ## Giao diện web

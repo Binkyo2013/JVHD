@@ -265,7 +265,22 @@ final class DeviceKey {
     /// Ký dữ liệu thô (đã decode base64) bằng SHA-256 + ECDSA, trả về DER/base64.
     /// Giống `crypto.sign('sha256', payload, key)` của bản Node: kể cả khi
     /// `message` RỖNG vẫn phải trả về một chữ ký hợp lệ.
+    ///
+    /// [BẢN SỬA NÀY] Đường Secure Enclave/Keychain trước đây trả NGUYÊN
+    /// `(signature as Data)` — tức định dạng **ANSI X9.62** (`r||s`, 64 byte) do
+    /// `SecKeyCreateSignature` sinh ra, trong khi `JVHDConfig.sigFormat` là
+    /// `"der-b64"` và máy chủ xác thực kiểm bằng
+    /// `crypto.createVerify("SHA256").update(data).verify(key, sig)` (chỉ đọc DER).
+    /// Trên iPhone thật, khoá LUÔN nằm ở Secure Enclave, nên mọi chữ ký iOS gửi lên
+    /// bị `verifySig()` trả `false`: thiết bị mới nhận `{status:"bad"}` (app báo
+    /// "Phiên xác thực hết hạn…"), thiết bị đã bind nhận `denied` ("Thiết bị không
+    /// khớp thiết bị đã đăng ký"). Máy build macOS không thấy được lỗi này vì ở đó
+    /// SecEnclave không khả dụng, `DeviceKey` rơi xuống nhánh CryptoKit (vốn đã trả
+    /// `derRepresentation`) — vì vậy bắt buộc phải có `derEncodeRS` + fixture check
+    /// trong CI (tools/ios_crypto_check) thay vì chỉ trông vào probe trên runner.
     func signBase64(message: Data) -> String {
+        let format = JVHDConfig.sigFormat.lowercased()
+        let wantDer = !format.hasPrefix("raw")
         switch backend() {
         case .secureEnclave(let key), .keychain(let key):
             var error: Unmanaged<CFError>?
@@ -279,13 +294,28 @@ final class DeviceKey {
                 NSLog("[JVHD][DeviceKey] ký thất bại: %@", describe(error))
                 return ""
             }
-            return (signature as Data).base64EncodedString()
+            let signed = signature as Data
+            // Apple KHÔNG trả về một định dạng duy nhất cho
+            // .ecdsaSignatureMessageX962SHA256: khoá Secure Enclave xuất X9.62
+            // (64 byte) nhưng khoá Keychain thông thường xuất DER sẵn.
+            // normalizedSignature() nhận diện cả hai, còn ép bọc một blob đã là
+            // DER sẽ tạo ra chữ ký rác mà server không đọc được.
+            guard let body = JVHDCrypto.normalizedSignature(signed, wantDer: wantDer) else {
+                let reason = "chữ ký \(signed.count) byte từ tầng khoá không phải X9.62 lẫn DER"
+                diagnostics["signError"] = reason
+                NSLog("[JVHD][DeviceKey] %@", reason)
+                return ""
+            }
+            return encodeSignature(body, format: format)
         case .cryptoKit(let key):
             do {
                 // `derRepresentation` đúng bằng chữ ký ASN.1 DER mà
                 // `crypto.sign(...)` của Node sinh ra (sigFormat = "der-b64").
                 let signature = try key.signature(for: message)
-                return Data(signature.derRepresentation).base64EncodedString()
+                let body: Data = wantDer
+                    ? Data(signature.derRepresentation)
+                    : Data(signature.rawRepresentation)
+                return encodeSignature(body, format: format)
             } catch {
                 diagnostics["signError"] = error.localizedDescription
                 return ""
@@ -294,6 +324,15 @@ final class DeviceKey {
             diagnostics["signError"] = "không có khoá thiết bị"
             return ""
         }
+    }
+
+    /// Base64 (mặc định) hoặc hex, theo hậu tố của `JVHDConfig.sigFormat`
+    /// — cùng quy tắc `crypto-bridge.js` dùng cho bản Windows/Android.
+    private func encodeSignature(_ body: Data, format: String) -> String {
+        if format.contains("-hex") {
+            return body.map { String(format: "%02x", $0) }.joined()
+        }
+        return body.base64EncodedString()
     }
 
     // MARK: - Tiện ích

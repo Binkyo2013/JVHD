@@ -3,8 +3,16 @@
  * c0(name) = SHA-256( name.trim().lowercased() + salt ) — khớp 100% bản
  * Node.js (`src/crypto-bridge.js`) và libbtcore.so bản gốc.
  *
- * Chữ ký (e0) nằm trong DeviceKey.swift vì cần khoá riêng trong
- * Secure Enclave.
+ * Ba hàm định dạng dưới đây là chỗ BẢN iOS từng lệch hợp đồng Android/server:
+ *   · decodeBase64NodeCompatible() — mô phỏng đúng `Buffer.from(text,'base64')`
+ *     mà bản Windows/Android dùng cho challenge: KHÔNG "hỏng" khi chuỗi rỗng hoặc
+ *     có ký tự lạ, chuỗi rỗng vẫn ký được như Node. (Thêm ở PR trước.)
+ *   · derEncodeRS()          — đóng gói chữ ký ANSI X9.62 (r||s do
+ *     `SecKeyCreateSignature` sinh ra) thành ASN.1 DER như `sigFormat:"der-b64"`.
+ *   · derDecodeRS()          — chiều ngược lại, dùng cho tự kiểm tra round-trip.
+ * Ba hàm này là mã thuần (không phụ thuộc Keychain) nên được CI kiểm bằng
+ * fixture sinh từ Node/OpenSSL: xem test/gen_der_fixtures.js +
+ * tools/ios_crypto_check/.
  */
 
 import Foundation
@@ -104,5 +112,143 @@ enum JVHDCrypto {
 
     static func encodeBase64(_ text: String) -> String {
         return Data(text.utf8).base64EncodedString()
+    }
+
+    // MARK: - Định dạng chữ ký ECDSA (X9.62 <-> DER)
+
+    /// INTEGER ASN.1 tối thiểu: bỏ 0 đệm thừa, thêm 0x00 nếu byte cao có bit dấu.
+    private static func derInteger(_ value: [UInt8]) -> [UInt8] {
+        var bytes = value
+        while bytes.count > 1, bytes.first == 0x00 { bytes.removeFirst() }
+        if let first = bytes.first, (first & 0x80) != 0 { bytes.insert(0x00, at: 0) }
+        return [0x02] + derLength(bytes.count) + bytes
+    }
+
+    private static func derLength(_ length: Int) -> [UInt8] {
+        if length < 0x80 { return [UInt8(length)] }
+        var value = length
+        var bytes: [UInt8] = []
+        while value > 0 {
+            bytes.insert(UInt8(value & 0xff), at: 0)
+            value >>= 8
+        }
+        return [UInt8(0x80 | bytes.count)] + bytes
+    }
+
+    /// `data` có phải một chữ ký ECDSA dạng ASN.1 DER hợp lệ hay không:
+    /// `SEQUENCE { INTEGER r, INTEGER s }` dùng **đúng hết** số byte.
+    /// Cần hàm này vì `SecKeyCreateSignature(.ecdsaSignatureMessageX962SHA256)`
+    /// không cho ra một định dạng duy nhất: khoá trong Secure Enclave trả
+    /// X9.62 (`r||s`, 64 byte), còn khoá Keychain thông thường (kể cả trên
+    /// máy build macOS) lại trả **DER sẵn** (68–72 byte).
+    static func looksLikeDERSignature(_ data: Data) -> Bool {
+        let bytes = [UInt8](data)
+        guard bytes.count > 6, bytes[0] == 0x30 else { return false }
+        var position = 1
+        var total = Int(bytes[position]); position += 1
+        if (total & 0x80) != 0 {
+            let countOfLength = total & 0x7f
+            guard countOfLength > 0, countOfLength <= 3, position + countOfLength <= bytes.count else { return false }
+            total = 0
+            for _ in 0..<countOfLength {
+                total = (total << 8) | Int(bytes[position]); position += 1
+            }
+        }
+        // SEQUENCE phải bọc vừa khít phần còn lại, không thừa không thiếu.
+        guard total >= 4, position + total == bytes.count else { return false }
+        let end = position + total
+        for _ in 0..<2 {
+            guard position < end, bytes[position] == 0x02 else { return false }
+            position += 1
+            guard position < end else { return false }
+            var length = Int(bytes[position]); position += 1
+            if (length & 0x80) != 0 {
+                let countOfLength = length & 0x7f
+                guard countOfLength > 0, countOfLength <= 3, position + countOfLength <= end else { return false }
+                length = 0
+                for _ in 0..<countOfLength {
+                    length = (length << 8) | Int(bytes[position]); position += 1
+                }
+            }
+            guard length >= 1, length <= 33, position + length <= end else { return false }
+            position += length
+        }
+        return position == end
+    }
+
+    /// Trả về chữ ký ĐÚNG định dạng mà máy chủ cần, bất kể tầng khoá xuất ra
+    /// X9.62 hay DER. Đây là chỗ BẢN iOS từng sai trên máy thật:
+    /// `SecKeyCreateSignature` chỉ xuất X9.62 ở nhánh Secure Enclave, còn máy
+    /// chủ và bản Android/Windows dùng DER — và ngược lại, ép bọc một blob đã
+    /// là DER sẵn sẽ tạo ra chữ ký rác.
+    static func normalizedSignature(_ signature: Data, wantDer: Bool) -> Data? {
+        // Chuỗi 64 byte được ưu tiên hiểu là `r||s` theo ANSI X9.62 (đúng tài
+        // liệu Apple cho ecdsaSignatureMessageX962SHA256); DER của P-256 luôn
+        // dài 68–72 byte nên không nhầm được.
+        let alreadyDer = signature.count != 64 && looksLikeDERSignature(signature)
+        if wantDer {
+            return alreadyDer ? signature : derEncodeRS(signature)
+        }
+        if alreadyDer { return derDecodeRS(signature) ?? signature }
+        return signature
+    }
+
+    /// ANSI X9.62 (`r||s`, mỗi thành phần 32 byte với P-256) -> ASN.1 DER.
+    static func derEncodeRS(_ raw: Data) -> Data? {
+        let bytes = [UInt8](raw)
+        guard bytes.count >= 8, bytes.count % 2 == 0 else { return nil }
+        // Không bao giờ bọc chồng lên một DER có độ dài khác 64 (rác).
+        if bytes.count != 64, looksLikeDERSignature(raw) { return nil }
+        let half = bytes.count / 2
+        let body = derInteger(Array(bytes[0..<half])) + derInteger(Array(bytes[half..<bytes.count]))
+        return Data([0x30] + derLength(body.count) + body)
+    }
+
+    /// ASN.1 DER -> `r||s` (mỗi thành phần `width` byte). Dùng để tự kiểm tra.
+    static func derDecodeRS(_ der: Data, width: Int = 32) -> Data? {
+        let bytes = [UInt8](der)
+        guard bytes.count > 2, bytes[0] == 0x30 else { return nil }
+        var position = 1
+        var total = Int(bytes[position]); position += 1
+        if (total & 0x80) != 0 {
+            let countOfLength = (total & 0x7f)
+            guard countOfLength > 0, countOfLength <= 3, position + countOfLength <= bytes.count else { return nil }
+            total = 0
+            for _ in 0..<countOfLength {
+                total = (total << 8) | Int(bytes[position]); position += 1
+            }
+        }
+        guard position + total <= bytes.count else { return nil }
+        let end = position + total
+
+        var parts: [[UInt8]] = []
+        for _ in 0..<2 {
+            guard position < end, bytes[position] == 0x02 else { return nil }
+            position += 1
+            guard position < end else { return nil }
+            var length = Int(bytes[position]); position += 1
+            if (length & 0x80) != 0 {
+                let countOfLength = (length & 0x7f)
+                guard countOfLength > 0, countOfLength <= 3, position + countOfLength <= end else { return nil }
+                length = 0
+                for _ in 0..<countOfLength {
+                    length = (length << 8) | Int(bytes[position]); position += 1
+                }
+            }
+            guard length >= 0, position + length <= end else { return nil }
+            parts.append(Array(bytes[position..<(position + length)]))
+            position += length
+        }
+        guard position == end else { return nil }
+
+        var output: [UInt8] = []
+        for part in parts {
+            var value = part
+            while value.count > 1, value.first == 0x00 { value.removeFirst() }
+            if value.count > width { return nil }
+            output.append(contentsOf: [UInt8](repeating: 0, count: width - value.count))
+            output.append(contentsOf: value)
+        }
+        return Data(output)
     }
 }

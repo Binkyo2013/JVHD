@@ -8916,9 +8916,43 @@
         jvhdUserAuthFinishChecking();
         if (!jvhdUserGateOpen) return;
         var hardStatus = document.getElementById("bintv-jvhd-user-status");
-        if (hardStatus) hardStatus.textContent = "Thiết bị không hỗ trợ xác thực, không thể tiếp tục";
+        if (hardStatus) hardStatus.textContent = "Thiết bị không hỗ trợ xác thực, không thể tiếp tục" + jvhdUserIOSDiag();
     }
 
+    // [iOS-only] Khi cau "thiet bi khong ho tro xac thuc" xuat hien tren iOS, thu
+    // pham nam o tang cau noi native (ios-bridge.js -> LocalServer -> DeviceKey),
+    // khong phai o tai khoan. Noi them ly do ky thuat de nguoi dung bao loi co
+    // du lieu. Android/Windows/Tizen KHONG co window.__JVHD_IOS__ (cờ nay chi do
+    // www/ios-bridge.js đặt) nên câu chữ + hành vi của các bản đó giữ nguyên.
+    function jvhdUserIOSDiag() {
+        try {
+            if (!window.__JVHD_IOS__) return "";
+            var detail = "";
+            if (window.JVHDiOS && typeof window.JVHDiOS.authStatus === "function") {
+                detail = String(window.JVHDiOS.authStatus() || "");
+            } else {
+                detail = "ios-bridge.js chua nap";
+            }
+            // Nếu cầu nối có đường đọc chẩn đoán sâu (/__native/env), nối thêm tầng
+            // khoá đang hoạt động + lỗi ký — đủ để biết hỏng ở Secure Enclave,
+            // Keychain hay tệp mà không cần cắm iPhone vào máy Mac.
+            try {
+                if (typeof window.__jvhdNativeDiagnostics === "function") {
+                    var diag = window.__jvhdNativeDiagnostics() || {};
+                    // /__native/env trả chẩn đoán khoá trong mục `deviceKey`
+                    // (activeBackend / loadKeychainStatus / publicKeyError / signError).
+                    var dk = (diag.env && diag.env.deviceKey) || {};
+                    var extra = [];
+                    if (dk.activeBackend) extra.push("khoá=" + dk.activeBackend);
+                    if (typeof dk.loadKeychainStatus !== "undefined") extra.push("keychain=" + dk.loadKeychainStatus);
+                    if (dk.publicKeyError) extra.push("d0=" + dk.publicKeyError);
+                    if (dk.signError) extra.push("e0=" + dk.signError);
+                    if (extra.length) detail += (detail ? " · " : "") + extra.join(" · ");
+                }
+            } catch (deepError) {}
+            return detail ? " — iOS: " + detail : "";
+        } catch (diagError) { return ""; }
+    }
     function submitJvhdUserGate() {
         if (!jvhdUserGateOpen || jvhdUserChecking) return;
         if (jvhdUserLockRemaining() > 0) { updateJvhdUserGate(); return; }
@@ -8932,14 +8966,14 @@
         var digest = jvhdUserNativeHash(name);
         if (!digest) {
             // Fail-closed: thiet bi khong co native hash -> khong cho qua.
-            if (status) status.textContent = "Thiết bị không hỗ trợ xác thực, không thể tiếp tục";
+            if (status) status.textContent = "Thiết bị không hỗ trợ xác thực, không thể tiếp tục" + jvhdUserIOSDiag();
             return;
         }
         var bridge = null;
         try { bridge = window.AndroidBridge || null; } catch (bridgeError) { bridge = null; }
         if (!bridge || typeof bridge.d0 !== "function" || typeof bridge.e0 !== "function") {
             // Fail-closed: thieu device-key bridge (lib/Keystore) -> khong the xac thuc.
-            if (status) status.textContent = "Thiết bị không hỗ trợ xác thực, không thể tiếp tục";
+            if (status) status.textContent = "Thiết bị không hỗ trợ xác thực, không thể tiếp tục" + jvhdUserIOSDiag();
             return;
         }
         jvhdUserChecking = true;
