@@ -29,7 +29,8 @@ import Foundation
 enum IOSCryptoCheck {
 
     private static func die(_ message: String) -> Never {
-        FileHandle.standardError.write(Data("[ios-crypto-check] LỖI: " + message + "\n".utf8))
+        let line = "[ios-crypto-check] LỖI: " + message + "\n"
+        FileHandle.standardError.write(Data(line.utf8))
         exit(1)
     }
 
