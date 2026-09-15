@@ -1,0 +1,69 @@
+name: Auth diagnostic probe
+
+# ============================================================================
+#  CHẨN ĐOÁN: (1) đọc đúng hợp đồng của máy chủ xác thực đang chạy,
+#  (2) biên dịch THẬT Config/Crypto/DeviceKey.swift và đối chiếu d0()/e0()
+#      của iOS với `crypto` của Node (chuẩn Android/Windows).
+#
+#  AN TOÀN VỚI JSONBIN: không có bước nào gọi /auth/bind, nên không thể tạo,
+#  ghi đè hay xoá ràng buộc thiết bị đang lưu.
+#
+#  Chạy:  gh workflow run auth-probe.yml --ref <branch>
+# ============================================================================
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server-contract:
+    name: Đọc hợp đồng máy chủ xác thực
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: GET /health
+        run: |
+          curl -sS --max-time 180 https://jvhd-auth.onrender.com/health || true
+          echo
+      - name: POST /auth/start (hash hợp lệ đã biết + hash không tồn tại)
+        run: |
+          node tools/auth_probe.js \
+            37b5d924f34f64ed7e88033b8c31db39b314ddca0ec624ea94d5b8056467ca5b \
+            0000000000000000000000000000000000000000000000000000000000000000
+
+  native-crypto:
+    name: Đối chiếu mật mã iOS với chuẩn Android
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Chọn Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          swift --version
+      - name: Biên dịch Config/Crypto/DeviceKey.swift + harness
+        run: |
+          set -e
+          swiftc -O \
+            ios/JVHD/Config.swift \
+            ios/JVHD/Crypto.swift \
+            ios/JVHD/DeviceKey.swift \
+            tools/native_crypto_main.swift \
+            -o /tmp/native_crypto_probe
+          echo "biên dịch OK"
+      - name: Chạy harness native
+        run: |
+          /tmp/native_crypto_probe | tee /tmp/native_out.txt
+      - name: Node verify chữ ký Swift bằng crypto (chuẩn Android)
+        run: |
+          JSON=$(grep '^SWIFT_RESULT ' /tmp/native_out.txt | head -1 | sed 's/^SWIFT_RESULT //')
+          node tools/verify_swift_sig.js "$JSON"
