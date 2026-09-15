@@ -6,7 +6,7 @@
 ================ /auth/start  h=37b5d924f34f64ed7e88033b8c31db39b314ddca0ec624ea94d5b8056467ca5b ================
 HTTP 200
 content-type: application/json; charset=utf-8
-body(raw): {"status":"challenge","challenge":"nCYi90Q8f3+rSaBM5Z1a536UT0DKhkksOJAjPl/7Y+M="}
+body(raw): {"status":"challenge","challenge":"jBOMMpVq7mIXHkp46drm/Wigp6UNzYjJNxpkyfF0mH8="}
 keys: ["status","challenge"]
 status: "challenge"
   trường 'status' -> {"length":9,"base64Strict":false,"base64Loose":true,"base64Url":true,"hex":false,"printableAscii":true,"decodedBase64Bytes":6,"roundTripsBase64":false}
@@ -70,7 +70,7 @@ type-check OK
 biên dịch OK
 
 ### native harness (Swift thật trong IPA)
-SWIFT_RESULT {"c0_Admin2":"37b5d924f34f64ed7e88033b8c31db39b314ddca0ec624ea94d5b8056467ca5b","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=","challengeEncoding":"base64","concat":"suffix","d0":"BAl8xtRWa44iNk+LIj11pXfdhQA9zzPqcZGRifHpQe\/x7SWQxLzBceNcdms7XNB3IlzfdioRRhWTF9VUjUrsKPY=","d0_bytes":65,"d0_firstByte":4,"deviceKeyDiagnostics":{"activeBackend":"keychain","cryptoKitFile":"not-found","hasKey":true,"keychainCreate":"ok","loadKeychainStatus":-25300,"secureEnclave_noAccessControl":"CFError -34018: The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000017edb40>)","secureEnclave_withAccessControl":"CFError -34018: The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000017ed0e0>)"},"nodeCompatHex":{"":""," A G V s b G 8 ":"00656c6c6f","!!!":"","a":"","a=b=c":"","ab":"69b0","abababababababababababababababababababababababababababababababab":"69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b","abc":"69b7","abcd":"69b71d","aGVsbG8td29ybGQ":"68656c6c6f2d776f726c64","aGVsbG8td29ybGQ_":"68656c6c6f2d776f726c643f","aGVsbG8td29ybGQ=":"68656c6c6f2d776f726c64","Eqa8elAwNrjCZ8dAR5UTvU0fbJ9q7gFaiSXckN99CLc=":"12a6bc7a503036b8c267c740479513bd4d1f6c9f6aee015a8925dc90df7d08b7","n8Kd2-sX91_qW":"9fc29ddbeb17f75fea","QUJDRA==QQ":"4142434400"},"pubKeyFormat":"raw-uncompressed-b64","salt":"4f4e804da5c307dd7d88d2b58e1a44c6b312c1430ff4d29d","sig":"MEUCIFGPqYVziT9gQsnrDBHP6U4bjXaxiO99YEX4ntc9u75vAiEAre\/ldjoBD3sOKdVYS6nbOjeNfexbU0I9Xs1ODKBEi\/g=","sig_bytes":71,"sig_isDER":true,"sigForEmptyInput":"MEUCIAOzqCeGOdrmKMlKnK07E\/aYEScCp6zIsVdmmiq\/civVAiEA5XGXVkh2YhtvZlIsxQCFQKBY6o2u+\/bGdEP1t+coHpc=","sigForEmptyInput_isDER":true,"sigFormat":"der-b64","signNotEmpty":{"":true," A G V s b G 8 ":true,"!!!":true,"a":true,"a=b=c":true,"ab":true,"abababababababababababababababababababababababababababababababab":true,"abc":true,"abcd":true,"aGVsbG8td29ybGQ":true,"aGVsbG8td29ybGQ_":true,"aGVsbG8td29ybGQ=":true,"Eqa8elAwNrjCZ8dAR5UTvU0fbJ9q7gFaiSXckN99CLc=":true,"n8Kd2-sX91_qW":true,"QUJDRA==QQ":true},"swiftVerify":true,"swiftVerifyEmpty":true}
+SWIFT_RESULT {"c0_Admin2":"37b5d924f34f64ed7e88033b8c31db39b314ddca0ec624ea94d5b8056467ca5b","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=","challengeEncoding":"base64","concat":"suffix","d0":"BM4sBKJ+PsHycNbFv58+be81\/HxbQq754hpkhuLuoLRsRQMMooH+LfBiyj3v39aL5zwP9xzCDFAM4m8oXvk0qu4=","d0_bytes":65,"d0_firstByte":4,"deviceKeyDiagnostics":{"activeBackend":"keychain","cryptoKitFile":"not-found","hasKey":true,"keychainCreate":"ok","loadKeychainStatus":-25300,"secureEnclave_noAccessControl":"CFError -34018: The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000005a5980>)","secureEnclave_withAccessControl":"CFError -34018: The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000005afce0>)"},"nodeCompatHex":{"":""," A G V s b G 8 ":"00656c6c6f","!!!":"","a":"","a=b=c":"","a1b2c3d4-e5f6-7890-abcd-ef1234567890":"6b56f6737778f9ee5febeefcf74f9a6dc77e79fd76df8e7aefcf74","ab":"69","abababababababababababababababababababababababababababababababab":"69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b69b","abc":"69b7","abcd":"69b71d","abcde":"69b71d","abcdef":"69b71d79","abcdefg":"69b71d79f8","abcdefgh":"69b71d79f821","aGVsbG8td29ybGQ":"68656c6c6f2d776f726c64","aGVsbG8td29ybGQ_":"68656c6c6f2d776f726c643f","aGVsbG8td29ybGQ=":"68656c6c6f2d776f726c64","dG9rZW4td2l0aC1kYXNoZXMtYW5kLW5vLXBhZGRpbmctMQ":"746f6b656e2d776974682d6461736865732d616e642d6e6f2d70616464696e672d31","Eqa8elAwNrjCZ8dAR5UTvU0fbJ9q7gFaiSXckN99CLc=":"12a6bc7a503036b8c267c740479513bd4d1f6c9f6aee015a8925dc90df7d08b7","n8Kd2-sX91_qW":"9fc29ddbeb17f75fea","QUJDRA==QQ":"41424344"},"pubKeyFormat":"raw-uncompressed-b64","salt":"4f4e804da5c307dd7d88d2b58e1a44c6b312c1430ff4d29d","sig":"MEQCICmIhQwAqpshYcCVDu6XAqhHlESvuqL2a7QigQINCysFAiBXQVuer1zV\/alj9xowa\/EPSimxAlEjyB\/co+FNxfv2DQ==","sig_bytes":70,"sig_isDER":true,"sigForEmptyInput":"MEUCICBZUQYimucAwWt33s2uXPclM+DD6hb5EoKB67IIz+uoAiEA4LaoN80h+GGcwW+ZzEe\/jqQ2A58u6BpLUrIxmFnkPjg=","sigForEmptyInput_isDER":true,"sigFormat":"der-b64","signNotEmpty":{"":true," A G V s b G 8 ":true,"!!!":true,"a":true,"a=b=c":true,"a1b2c3d4-e5f6-7890-abcd-ef1234567890":true,"ab":true,"abababababababababababababababababababababababababababababababab":true,"abc":true,"abcd":true,"abcde":true,"abcdef":true,"abcdefg":true,"abcdefgh":true,"aGVsbG8td29ybGQ":true,"aGVsbG8td29ybGQ_":true,"aGVsbG8td29ybGQ=":true,"dG9rZW4td2l0aC1kYXNoZXMtYW5kLW5vLXBhZGRpbmctMQ":true,"Eqa8elAwNrjCZ8dAR5UTvU0fbJ9q7gFaiSXckN99CLc=":true,"n8Kd2-sX91_qW":true,"QUJDRA==QQ":true},"swiftVerify":true,"swiftVerifyEmpty":true}
 
 ### Node verify chữ ký Swift (chuẩn Android)
 
@@ -92,26 +92,28 @@ SWIFT_RESULT {"c0_Admin2":"37b5d924f34f64ed7e88033b8c31db39b314ddca0ec624ea94d5b
    ✓ "!!!"                        swift=0B node=0B
    ✓ "a"                          swift=0B node=0B
    ✓ "a=b=c"                      swift=0B node=0B
-   ✗ "ab"                         swift=2B node=1B
-       swift: 69b0
-       node : 69
+   ✓ "a1b2c3d4-e5f6-7890-abcd-ef1234567890" swift=27B node=27B
+   ✓ "ab"                         swift=1B node=1B
    ✓ "abababababababababababababababababababababababababababababababab" swift=48B node=48B
    ✓ "abc"                        swift=2B node=2B
    ✓ "abcd"                       swift=3B node=3B
+   ✓ "abcde"                      swift=3B node=3B
+   ✓ "abcdef"                     swift=4B node=4B
+   ✓ "abcdefg"                    swift=5B node=5B
+   ✓ "abcdefgh"                   swift=6B node=6B
    ✓ "aGVsbG8td29ybGQ"            swift=11B node=11B
    ✓ "aGVsbG8td29ybGQ_"           swift=12B node=12B
    ✓ "aGVsbG8td29ybGQ="           swift=11B node=11B
+   ✓ "dG9rZW4td2l0aC1kYXNoZXMtYW5kLW5vLXBhZGRpbmctMQ" swift=34B node=34B
    ✓ "Eqa8elAwNrjCZ8dAR5UTvU0fbJ9q7gFaiSXckN99CLc=" swift=32B node=32B
    ✓ "n8Kd2-sX91_qW"              swift=9B node=9B
-   ✗ "QUJDRA==QQ"                 swift=5B node=4B
-       swift: 4142434400
-       node : 41424344
-  FAIL  mọi mẫu base64 cho ra byte GIỐNG HỆT Node  (2 mẫu lệch)
+   ✓ "QUJDRA==QQ"                 swift=4B node=4B
+  PASS  mọi mẫu base64 cho ra byte GIỐNG HỆT Node
   PASS  e0() có chữ ký với MỌI dạng payload (không mẫu nào rỗng)
 
   Khoá thiết bị đang ở tầng nào (DeviceKey.diagnostics):
-   {"activeBackend":"keychain","cryptoKitFile":"not-found","hasKey":true,"keychainCreate":"ok","loadKeychainStatus":-25300,"secureEnclave_noAccessControl":"CFError -34018: The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000017edb40>)","secureEnclave_withAccessControl":"CFError -34018: The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000017ed0e0>)"}
+   {"activeBackend":"keychain","cryptoKitFile":"not-found","hasKey":true,"keychainCreate":"ok","loadKeychainStatus":-25300,"secureEnclave_noAccessControl":"CFError -34018: The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000005a5980>)","secureEnclave_withAccessControl":"CFError -34018: The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000005afce0>)"}
   PASS  DeviceKey tạo được khoá (d0()/e0() không thể rỗng)
 
-  PASS: 12   FAIL: 1
+  PASS: 13   FAIL: 0
 
