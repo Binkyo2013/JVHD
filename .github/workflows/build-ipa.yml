@@ -93,6 +93,34 @@ jobs:
           test -d www || { echo "::error::Thiếu thư mục www"; exit 1; }
           /usr/libexec/PlistBuddy -c 'Print' ios/JVHD/Info.plist | head -20
 
+      # ------------------------------------------------------------ kiểm thử --
+      # Chặn ngay từ vòng build nếu mật mã iOS lệch khỏi chuẩn Android/Windows.
+      # Đây chính là lớp đã bắt được lỗi "Thiết bị không hỗ trợ xác thực":
+      # e0() của iOS trả chuỗi rỗng với payload mà Node vẫn ký được.
+      - name: Setup Node (kiểm thử)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Kiểm thử Node (bản Windows + luồng đăng nhập iOS)
+        run: |
+          set -eo pipefail
+          node test/node_test.js
+          node test/ios_auth_test.js
+
+      - name: Đối chiếu mật mã iOS với chuẩn Android (d0/e0/c0)
+        run: |
+          set -eo pipefail
+          swiftc -O \
+            ios/JVHD/Config.swift \
+            ios/JVHD/Crypto.swift \
+            ios/JVHD/DeviceKey.swift \
+            tools/native_crypto_main.swift \
+            -o "$RUNNER_TEMP/native_crypto_probe"
+          "$RUNNER_TEMP/native_crypto_probe" | tee "$RUNNER_TEMP/native_out.txt"
+          JSON=$(grep '^SWIFT_RESULT ' "$RUNNER_TEMP/native_out.txt" | head -1 | sed 's/^SWIFT_RESULT //')
+          node tools/verify_swift_sig.js "$JSON"
+
       # ---------------------------------------------------------------- ký --
       - name: Nhập chứng thư & provisioning profile
         if: steps.setup.outputs.sign == 'true'
